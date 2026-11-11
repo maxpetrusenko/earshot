@@ -108,6 +108,14 @@ describe("trigger gate", () => {
     expect((await decide({ last_assistant_message: long, transcript_path: T("tool-turn") }, cfg("trigger:\n  opt_in_tag: true\n"))).narrate).toBe(false);
     expect((await decide({ last_assistant_message: `<narrate>${long}</narrate>`, transcript_path: T("tool-turn") }, cfg("trigger:\n  opt_in_tag: true\n"))).narrate).toBe(true);
   });
+  it("skips a reply that already carries an earshot link (skill ran), in markdown or plain form", async () => {
+    const md = `${long}\n[Listen](https://h.example/b/AbCdEfGhIjKlMnOp/edited.mp3) \u00b7 [Listen original](https://h.example/b/AbCdEfGhIjKlMnOp/original.mp3)`;
+    const plain = `${long}\nListen: http://localhost:7777/b/AbCdEfGhIjKlMnOp/edited.mp3\nListen original: http://localhost:7777/b/AbCdEfGhIjKlMnOp/original.mp3`;
+    for (const m of [md, plain]) {
+      expect(await decide({ last_assistant_message: m, transcript_path: T("tool-turn") }, cfg())).toMatchObject({ narrate: false, reason: expect.stringMatching(/already has an earshot link/) });
+    }
+    expect((await decide({ last_assistant_message: `${long} see https://example.com/b/short/edited.mp3`, transcript_path: T("tool-turn") }, cfg())).narrate).toBe(true);
+  });
   it("honors min_chars and require_tool_use settings", async () => {
     const c = cfg("trigger:\n  min_chars: 5\n  require_tool_use: false\n");
     expect((await decide({ last_assistant_message: "hello there", transcript_path: T("simple") }, c)).narrate).toBe(true);
