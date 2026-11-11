@@ -98,7 +98,7 @@ describe("notify payload and gate", () => {
   it("skips other events, short messages, missing logs and the opt-in tag", () => {
     expect(decideCodex({ ...payload, type: "approval-requested" }, cfg, find)).toMatchObject({ narrate: false });
     expect(decideCodex({ ...payload, "last-assistant-message": "ok" }, cfg, find)).toMatchObject({ narrate: false, reason: expect.stringContaining("min_chars") });
-    expect(decideCodex({ ...payload, "thread-id": "0000aaaa-0000-7000-8000-00000000ffff" }, cfg, find)).toMatchObject({ narrate: false, reason: expect.stringContaining("no tool use") });
+    expect(decideCodex({ ...payload, "thread-id": "0000aaaa-0000-7000-8000-00000000ffff" }, parseConfig("trigger:\n  require_tool_use: true\n"), find)).toMatchObject({ narrate: false, reason: expect.stringContaining("no tool use") });
     expect(decideCodex(payload, parseConfig("trigger:\n  opt_in_tag: true\n"), find)).toMatchObject({ narrate: false });
     expect(decideCodex({ ...payload, "last-assistant-message": `<narrate>${"x ".repeat(300)}</narrate> ${"y ".repeat(300)}` }, parseConfig("trigger:\n  opt_in_tag: true\n"), find)).toMatchObject({ narrate: true });
     expect(decideCodex({ ...payload, "thread-id": "../x" }, parseConfig("trigger:\n  require_tool_use: false\n"), find)).toMatchObject({ narrate: true, toolUses: 0 });

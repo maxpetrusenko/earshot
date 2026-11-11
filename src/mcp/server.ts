@@ -6,7 +6,7 @@ import { briefStatus, narrate, RateLimiter, ToolError, type BriefView, type Tool
 
 const NARRATE_DESCRIPTION =
   "Turn a finished task's result into two spoken memos (edited and original) with a sketch. Returns two links that start playing when opened, even while the audio is still being made. " +
-  "Pass the final reply text exactly as written, not a summary. The text content is one markdown line, [Listen](<listen>) · [Listen original](<listen_original>): print it as the last line of the reply, verbatim, with nothing after it. Do not print the card link unless asked. " +
+  "Pass the final reply text exactly as written, not a summary. The text content is one markdown line, [Listen](<listen>) · [Original](<listen_original>): print it as the last line of the reply, verbatim, with nothing after it. Do not print the card link unless asked. " +
   "Returns at once by default (check with brief_status).";
 
 const asResult = (v: BriefView) => ({

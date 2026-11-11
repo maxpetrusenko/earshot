@@ -323,3 +323,16 @@ describe("svg css escapes", () => {
     expect(clean).not.toMatch(/image-set|url\(/i);
   });
 });
+
+describe("short style cap", () => {
+  it("cuts at a sentence boundary under the word cap", async () => {
+    const { capWords, countWords } = await import("../src/earscript.js");
+    const s = Array.from({ length: 30 }, (_, i) => `Sentence number ${i} has six words.`).join(" ");
+    const out = capWords(s, 110);
+    expect(countWords(out)).toBeLessThanOrEqual(110);
+    expect(out.endsWith(".")).toBe(true);
+    expect(s.startsWith(out)).toBe(true);
+    expect(capWords("short one.", 110)).toBe("short one.");
+    expect(countWords(capWords("word ".repeat(300), 110))).toBeLessThanOrEqual(110);
+  });
+});

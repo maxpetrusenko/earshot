@@ -131,7 +131,7 @@ describe("MCP over stdio (real SDK client, real server process)", () => {
       expect(tools).toEqual(["brief_status", "narrate"]);
       const call = await client.callTool({ name: "narrate", arguments: { text: "Migrated the table and all rows moved. ".repeat(12) } });
       expect(call.isError).toBeFalsy();
-      expect((call.content as { text: string }[])[0]!.text).toMatch(/^\[Listen\]\(http:\/\/localhost:17790\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Listen original\]\(.*\/original\.mp3\)$/);
+      expect((call.content as { text: string }[])[0]!.text).toMatch(/^\[Listen\]\(http:\/\/localhost:17790\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Original\]\(.*\/original\.mp3\)$/);
       const first = call.structuredContent as { id: string; url: string; status: string };
       expect(first.url).toMatch(/^http:\/\/localhost:17790\/b\/[A-Za-z0-9]{16}$/);
       let status = first.status;

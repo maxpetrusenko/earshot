@@ -91,13 +91,17 @@ describe("SentenceSplitter and chunking", () => {
 describe("speakableOriginal", () => {
   it("drops code blocks, urls and hashes, and names paths", () => {
     const out = speakableOriginal("Fixed `src/billing/webhook.ts` in commit 9fceb02d0ae598e.\n\n```ts\nconst x = 1;\n```\nSee https://github.com/a/b/pull/3 now.");
-    expect(out).toContain("the webhook file");
-    expect(out).not.toMatch(/const x|9fceb|https|src\//);
-    expect(out).toContain("a link");
+    expect(out).toBe("Fixed in commit.\n\nSee now.");
+    expect(out).not.toMatch(/const x|9fceb|https|src\/|webhook/);
   });
-  it("turns bullets and headings into sentences and drops table rows", () => {
+  it("keeps link text, skips flags, link targets and the Listen line", () => {
+    const out = speakableOriginal("Run `--force` or `pnpm test`. Read [the PR](https://github.com/a/b/pull/3) first.\n[Listen](http://h/b/AbCdEfGhIjKlMnOp/edited.mp3) \u00b7 [Original](http://h/b/AbCdEfGhIjKlMnOp/original.mp3)");
+    expect(out).toBe("Run or pnpm test. Read the PR first.");
+    expect(out).not.toMatch(/https|Listen|Original|force/);
+  });
+  it("turns bullets and headings into sentences and replaces a table with one line", () => {
     const out = speakableOriginal("# Status\n- First thing\n- Second thing\n| a | b |\n|---|---|\n");
-    expect(out.split("\n")).toEqual(["Status.", "First thing.", "Second thing."]);
+    expect(out.split("\n")).toEqual(["Status.", "First thing.", "Second thing.", "There's a table in the chat."]);
   });
   it("de-snakes identifiers and strips markup", () => {
     expect(speakableOriginal("The **retry_count** is `maxAttempts`.")).toBe("The retry count is max attempts.");

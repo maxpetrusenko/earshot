@@ -220,7 +220,7 @@ program
   .option("--no-sketch", "skip the sketch")
   .option("--no-audio", "skip the audio")
   .option("--json", "same as --format json")
-  .option("--format <format>", "text (one markdown line: [Listen](...) · [Listen original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) or orca (wait for the audio, write an inline player page for Orca chat, print one ::orca-visual line)")
+  .option("--format <format>", "text (one markdown line: [Listen](...) · [Original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) or orca (wait for the audio, write an inline player page for Orca chat, print one ::orca-visual line)")
   .option("--orca-audio <mode>", "with --format orca: stream (link the served MP3s, instant) or inline (embed the audio; config orca.audio is the default)")
   .option("--orca-dir <path>", "where --format orca writes the page (default $ORCA_CHAT_SCRATCH_DIR)")
   .option("--dry-run", "scrub and ear-script only; print the script")

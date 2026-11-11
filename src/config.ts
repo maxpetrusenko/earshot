@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
+import { DEFAULT_STYLE, type ScriptStyle } from "./prompt-version.js";
 
 export class ConfigError extends Error {}
 
@@ -48,7 +49,7 @@ export interface Config {
   serve: ServeConfig;
   privacy: { redact: boolean; max_input_chars: number; evidence_hosts: string[] };
   /** story: a conversational memo (prompt v1); brief: the terse v0 memo. */
-  script: { style: "story" | "brief" };
+  script: { style: ScriptStyle };
   /** stream: the Orca page links the served MP3s (tiny page, needs the server reachable); inline: audio is embedded as data URLs. */
   orca: { audio: "stream" | "inline" };
   /** Which Stop events become a memo (hook mode). */
@@ -79,8 +80,8 @@ export const DEFAULTS: Config = {
   image: { type: "mermaid", renderer: "beautiful-mermaid", theme: "paper" },
   serve: { mode: "tailscale-serve", port: 7777, https_port: 443 },
   privacy: { redact: true, max_input_chars: 40000, evidence_hosts: [] },
-  trigger: { min_chars: 400, require_tool_use: true, opt_in_tag: false },
-  script: { style: "story" },
+  trigger: { min_chars: 80, require_tool_use: false, opt_in_tag: false },
+  script: { style: DEFAULT_STYLE },
   orca: { audio: "inline" },
 };
 
@@ -209,7 +210,7 @@ export function parseConfig(text: string): Config {
       require_tool_use: pick(trigger, "trigger", "require_tool_use", d.trigger.require_tool_use, isBool, "true or false"),
       opt_in_tag: pick(trigger, "trigger", "opt_in_tag", d.trigger.opt_in_tag, isBool, "true or false"),
     },
-    script: { style: pick(script, "script", "style", d.script.style, oneOf("story", "brief"), "story or brief") },
+    script: { style: pick(script, "script", "style", d.script.style, oneOf("short", "story", "brief"), "short, story or brief") },
     orca: { audio: pick(orca, "orca", "audio", d.orca.audio, oneOf("stream", "inline"), "stream or inline") },
   };
   applyTtsProfile(cfg, tts.profiles);

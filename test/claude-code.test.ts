@@ -102,15 +102,16 @@ describe("trigger gate", () => {
   });
   it("skips short replies, no-tool turns, stop_hook_active and missing opt-in tag", async () => {
     expect((await decide({ last_assistant_message: "done", transcript_path: T("tool-turn") }, cfg())).narrate).toBe(false);
-    expect((await decide({ last_assistant_message: long, transcript_path: T("simple") }, cfg())).narrate).toBe(false);
-    expect((await decide({ last_assistant_message: long }, cfg())).narrate).toBe(false);
+    expect((await decide({ last_assistant_message: long, transcript_path: T("simple") }, cfg("trigger:\n  require_tool_use: true\n"))).narrate).toBe(false);
+    expect((await decide({ last_assistant_message: long }, cfg("trigger:\n  require_tool_use: true\n"))).narrate).toBe(false);
+    expect((await decide({ last_assistant_message: long, transcript_path: T("simple") }, cfg())).narrate).toBe(true);
     expect((await decide({ stop_hook_active: true, last_assistant_message: long, transcript_path: T("tool-turn") }, cfg())).narrate).toBe(false);
     expect((await decide({ last_assistant_message: long, transcript_path: T("tool-turn") }, cfg("trigger:\n  opt_in_tag: true\n"))).narrate).toBe(false);
     expect((await decide({ last_assistant_message: `<narrate>${long}</narrate>`, transcript_path: T("tool-turn") }, cfg("trigger:\n  opt_in_tag: true\n"))).narrate).toBe(true);
   });
   it("skips a reply that already carries an earshot link (skill ran), in markdown or plain form", async () => {
-    const md = `${long}\n[Listen](https://h.example/b/AbCdEfGhIjKlMnOp/edited.mp3) \u00b7 [Listen original](https://h.example/b/AbCdEfGhIjKlMnOp/original.mp3)`;
-    const plain = `${long}\nListen: http://localhost:7777/b/AbCdEfGhIjKlMnOp/edited.mp3\nListen original: http://localhost:7777/b/AbCdEfGhIjKlMnOp/original.mp3`;
+    const md = `${long}\n[Listen](https://h.example/b/AbCdEfGhIjKlMnOp/edited.mp3) \u00b7 [Original](https://h.example/b/AbCdEfGhIjKlMnOp/original.mp3)`;
+    const plain = `${long}\nListen: http://localhost:7777/b/AbCdEfGhIjKlMnOp/edited.mp3\nOriginal: http://localhost:7777/b/AbCdEfGhIjKlMnOp/original.mp3`;
     for (const m of [md, plain]) {
       expect(await decide({ last_assistant_message: m, transcript_path: T("tool-turn") }, cfg())).toMatchObject({ narrate: false, reason: expect.stringMatching(/already has an earshot link/) });
     }
@@ -152,7 +153,7 @@ describe("Stop hook process", () => {
       const a = await spawnHook(env, payload);
       expect(a.ms).toBeLessThan(2000);
       const msg = JSON.parse(a.out).systemMessage as string;
-      expect(msg).toMatch(/^\[Listen\]\(http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Listen original\]\(http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/original\.mp3\)$/);
+      expect(msg).toMatch(/^\[Listen\]\(http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Original\]\(http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/original\.mp3\)$/);
       first = msg.split("/b/")[1]!.split("/")[0]!;
       const meta1 = JSON.parse(readFileSync(join(briefDir(first), "meta.json"), "utf8"));
       expect(meta1.status).toBe("pending");

@@ -13,7 +13,7 @@ export function briefLinks(base: string, id: string): Links {
 }
 
 /** The chat line: two tappable words on one line. The card link is not part of it. */
-export const listenMarkdown = (l: Pick<Links, "listen" | "listen_original">): string => `[Listen](${l.listen}) \u00b7 [Listen original](${l.listen_original})`;
+export const listenMarkdown = (l: Pick<Links, "listen" | "listen_original">): string => `[Listen](${l.listen}) \u00b7 [Original](${l.listen_original})`;
 
 /** The old two-line form, for `--format plain`. */
-export const listenLines = (l: Pick<Links, "listen" | "listen_original">): string => `Listen: ${l.listen}\nListen original: ${l.listen_original}`;
+export const listenLines = (l: Pick<Links, "listen" | "listen_original">): string => `Listen: ${l.listen}\nOriginal: ${l.listen_original}`;
