@@ -25,6 +25,7 @@ tts:
   speed: 1.0
   api_key_env: ""                 # empty for local endpoints
   timeout_s: 120
+  # original_base_url: http://localhost:8883/v1   # optional second TTS server for the original track (see docs/orca.md)
   profile: fast                   # which entry of profiles below is active
   # A profile overrides base_url, model, voice, speed, api_key_env or timeout_s.
   # Switch with the one line above.
@@ -68,3 +69,6 @@ trigger:                          # which Claude Code Stop events become a memo 
 
 script:
   style: story   # story: a conversational memo; brief: the short status-style memo
+
+orca:
+  audio: inline                   # inline: embed the audio in the page (waits for it); stream: link the served MP3s (instant)

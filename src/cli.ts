@@ -19,6 +19,8 @@ import { ForeignNotifyError, installCodex, uninstallCodex } from "./install/code
 import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install/mcp.js";
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
+import { fitOrcaPage, orcaDir, orcaLine, renderOrcaHtml, writeOrcaPage } from "./orca.js";
+import { readFileInBundle, readMeta } from "./bundle.js";
 import { flushTracing } from "./lib/llm-tracing.js";
 import { dryRun, executeBrief, loadPrepared, NothingUsableError } from "./run.js";
 import { startServe } from "./serve-cmd.js";
@@ -76,6 +78,8 @@ interface RunFlags {
   audio: boolean;
   json?: boolean;
   format?: string;
+  orcaDir?: string;
+  orcaAudio?: string;
   dryRun?: boolean;
   config?: string;
 }
@@ -83,6 +87,7 @@ interface RunFlags {
 class UsageError extends Error {}
 
 async function runCommand(flags: RunFlags): Promise<number> {
+  const runStart = performance.now();
   if (flags.session !== undefined && !(flags.from === "codex" ? isSafeCodexId(flags.session) : isSafeSessionId(flags.session))) {
     err("earshot: --session may contain only letters, digits, - and _ (max 80 characters)");
     return 2;
@@ -94,7 +99,9 @@ async function runCommand(flags: RunFlags): Promise<number> {
     return 2;
   }
   if (flags.session) touchLock(flags.session);
-  if (flags.format !== undefined && flags.format !== "text" && flags.format !== "plain" && flags.format !== "json") throw new UsageError(`--format must be text, plain or json, got "${flags.format}"`);
+  if (flags.format !== undefined && flags.format !== "text" && flags.format !== "plain" && flags.format !== "json" && flags.format !== "orca") throw new UsageError(`--format must be text, plain, json or orca, got "${flags.format}"`);
+  if (flags.orcaAudio !== undefined && flags.orcaAudio !== "stream" && flags.orcaAudio !== "inline") throw new UsageError(`--orca-audio must be stream or inline, got "${flags.orcaAudio}"`);
+  if (flags.format === "orca" && flags.detach) throw new UsageError("--format orca waits for the finished audio, so it cannot be combined with --detach");
   const asJson = flags.json || flags.format === "json";
   const out = (base: string, id: string) => {
     const l = briefLinks(base, id);
@@ -113,13 +120,28 @@ async function runCommand(flags: RunFlags): Promise<number> {
     log(`${ear.words} words, ${ear.retries} retries`);
     return 0;
   }
-  // The links go out before any work: the server streams each track while it is still being made.
+  const orca = flags.format === "orca";
+  if (orca && (flags.orcaAudio ?? cfg.orca.audio) === "stream") {
+    // Stream mode: the page links the served MP3s, which grow while the memo is made, so the line goes out at once.
+    const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, log });
+    log(`worker pid ${job.pid}, log ${job.log}`);
+    const id = job.prepared.meta.id;
+    const links = briefLinks(await cachedBaseUrl(cfg.serve), id);
+    const dir = orcaDir(flags.orcaDir);
+    if (!dir) log("orca: ORCA_CHAT_SCRATCH_DIR is unset or not a writable directory; printing the markdown Listen line");
+    const file = dir ? writeOrcaPage(dir, id, renderOrcaHtml({ edited: links.listen, original: links.listen_original })) : null;
+    process.stdout.write(`${file ? orcaLine(file) : listenMarkdown(links)}\n`);
+    log(`orca stream page: ${Math.round(performance.now() - runStart)}ms from start to line`);
+    return 0;
+  }
   const prep = prepareBrief(cfg, input.text, { from: input.from, session: flags.session, log });
   const base = await cachedBaseUrl(cfg.serve);
-  out(base, prep.meta.id);
+  // The links go out before any work: the server streams each track while it is still being made.
+  // Orca mode prints one line after the audio is complete instead.
+  if (!orca) out(base, prep.meta.id);
   let result;
   try {
-    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch, noAudio: !flags.audio, log });
+    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch, noAudio: !flags.audio, waitForAudio: orca, log });
   } catch (e) {
     if (e instanceof NothingUsableError) {
       err(`earshot: nothing usable was produced: ${e.message}`);
@@ -132,8 +154,37 @@ async function runCommand(flags: RunFlags): Promise<number> {
   const first = (["edited", "original"] as const).map((t) => `${t}=${meta.tracks?.[t]?.first_audio_ms ?? "n/a"}ms`).join(" ");
   log(`${meta.status} in ${meta.total_ms}ms (${timings}); bundle ${dir}`);
   log(`time to first audio: ${first}`);
+  if (orca) {
+    const line = await orcaOutput(flags.orcaDir, meta.id, base, runStart);
+    process.stdout.write(`${line}\n`);
+  }
   await healthCheck(base);
   return 0;
+}
+
+/** Orca mode: the inline player line, or the markdown Listen line when a page cannot be made. */
+async function orcaOutput(orcaFlag: string | undefined, id: string, base: string, runStart: number): Promise<string> {
+  const links = briefLinks(base, id);
+  const fallback = (why: string) => {
+    log(`orca: ${why}; printing the markdown Listen line`);
+    return listenMarkdown(links);
+  };
+  const dir = orcaDir(orcaFlag);
+  if (!dir) return fallback("ORCA_CHAT_SCRATCH_DIR is unset or not a writable directory");
+  const meta = readMeta(id);
+  const edited = meta?.tracks?.edited.status === "ready" ? readFileInBundle(id, "edited.mp3") : null;
+  if (!edited) return fallback("the edited track is not ready");
+  const original = meta?.tracks?.original.status === "ready" ? readFileInBundle(id, "original.mp3") : null;
+  try {
+    const t = performance.now();
+    const fit = await fitOrcaPage(edited, original, { editedSeconds: meta?.tracks?.edited.duration_s ?? undefined, originalSeconds: meta?.tracks?.original.duration_s ?? undefined });
+    log(`orca encode ${Math.round(performance.now() - t)}ms`);
+    const file = writeOrcaPage(dir, id, fit.html);
+    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; ${Math.round(performance.now() - runStart)}ms from start to line`);
+    return orcaLine(file);
+  } catch (e) {
+    return fallback(e instanceof Error ? e.message : String(e));
+  }
 }
 
 const program = new Command();
@@ -169,7 +220,9 @@ program
   .option("--no-sketch", "skip the sketch")
   .option("--no-audio", "skip the audio")
   .option("--json", "same as --format json")
-  .option("--format <format>", "text (one markdown line: [Listen](...) · [Listen original](...)), plain (two Listen: lines) or json ({listen, listen_original, card, id})")
+  .option("--format <format>", "text (one markdown line: [Listen](...) · [Listen original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) or orca (wait for the audio, write an inline player page for Orca chat, print one ::orca-visual line)")
+  .option("--orca-audio <mode>", "with --format orca: stream (link the served MP3s, instant) or inline (embed the audio; config orca.audio is the default)")
+  .option("--orca-dir <path>", "where --format orca writes the page (default $ORCA_CHAT_SCRATCH_DIR)")
   .option("--dry-run", "scrub and ear-script only; print the script")
   .option("--config <path>", "alternate config file")
   .action(async (flags: RunFlags) => {

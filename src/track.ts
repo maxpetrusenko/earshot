@@ -43,6 +43,8 @@ export interface TrackOptions {
   holdAfterFirst?: Promise<void>;
   /** Called once this track has its first chunk on disk, or has ended without one. */
   onSettled?: () => void;
+  /** Start every chunk's TTS request at once (the gate still caps them) and write in order: for callers that wait for the whole track. */
+  parallel?: boolean;
   synth?: Synth;
   log?: (line: string) => void;
 }
@@ -72,21 +74,26 @@ export class TrackWriter {
   add(text: string): void {
     if (this.failed || !text.trim()) return;
     const index = this.n++;
-    this.queue = this.queue.then(() => this.chunk(index, text)).catch((e) => this.fail(errMsg(e)));
+    const early = this.o.parallel ? this.speak(text) : null;
+    early?.catch(() => undefined); // a failure is raised when the queue reaches this chunk
+    this.queue = this.queue.then(() => this.chunk(index, text, early)).catch((e) => this.fail(errMsg(e)));
   }
 
-  private async chunk(index: number, text: string): Promise<void> {
-    if (this.failed) return;
-    if (index > 0 && this.o.holdAfterFirst) await Promise.race([this.o.holdAfterFirst, nap(HOLD_MAX_MS)]);
-    if (this.failed) return;
+  private async speak(text: string): Promise<TtsResult> {
     const { tts, voice, gate } = this.o;
     const synth = this.synth;
-    let r: TtsResult;
     try {
-      r = await gate.run(() => synth(tts, text, voice));
+      return await gate.run(() => synth(tts, text, voice));
     } catch {
-      r = await gate.run(() => synth(tts, text, voice)); // one retry for a transient server error
+      return await gate.run(() => synth(tts, text, voice)); // one retry for a transient server error
     }
+  }
+
+  private async chunk(index: number, text: string, early: Promise<TtsResult> | null): Promise<void> {
+    if (this.failed) return;
+    if (index > 0 && this.o.holdAfterFirst && !early) await Promise.race([this.o.holdAfterFirst, nap(HOLD_MAX_MS)]);
+    if (this.failed) return;
+    const r = await (early ?? this.speak(text));
     if (this.failed) return;
     const audio = stripMp3Meta(r.audio);
     const fmt = mp3Format(audio);

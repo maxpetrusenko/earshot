@@ -27,6 +27,8 @@ export interface TtsConfig {
   timeout_s: number;
   /** The active profile name, or "" when none is set. Its values are already merged into this object. */
   profile: string;
+  /** A second TTS server for the original track, so both tracks synthesize at once on servers that handle one request at a time. Empty: same server. */
+  original_base_url: string;
 }
 
 /** A named set of tts overrides. `fast` is Kokoro, `max` a voice clone; tts.profile picks one. */
@@ -47,6 +49,8 @@ export interface Config {
   privacy: { redact: boolean; max_input_chars: number; evidence_hosts: string[] };
   /** story: a conversational memo (prompt v1); brief: the terse v0 memo. */
   script: { style: "story" | "brief" };
+  /** stream: the Orca page links the served MP3s (tiny page, needs the server reachable); inline: audio is embedded as data URLs. */
+  orca: { audio: "stream" | "inline" };
   /** Which Stop events become a memo (hook mode). */
   trigger: { min_chars: number; require_tool_use: boolean; opt_in_tag: boolean };
 }
@@ -70,12 +74,14 @@ export const DEFAULTS: Config = {
     api_key_env: "",
     timeout_s: 120,
     profile: "",
+    original_base_url: "",
   },
   image: { type: "mermaid", renderer: "beautiful-mermaid", theme: "paper" },
   serve: { mode: "tailscale-serve", port: 7777, https_port: 443 },
   privacy: { redact: true, max_input_chars: 40000, evidence_hosts: [] },
   trigger: { min_chars: 400, require_tool_use: true, opt_in_tag: false },
   script: { style: "story" },
+  orca: { audio: "inline" },
 };
 
 export function defaultConfigPath(): string {
@@ -148,18 +154,19 @@ export function parseConfig(text: string): Config {
   }
   if (!isObj(raw)) throw new ConfigError("config: top level must be a mapping");
   for (const k of Object.keys(raw)) {
-    if (!["llm", "tts", "image", "serve", "privacy", "trigger", "script"].includes(k)) {
+    if (!["llm", "tts", "image", "serve", "privacy", "trigger", "script", "orca"].includes(k)) {
       throw new ConfigError(`config: unknown key "${k}"`);
     }
   }
   const d = DEFAULTS;
   const llm = section(raw, "llm", ["type", "model", "timeout_s", "command", "base_url", "api_key_env"]);
-  const tts = section(raw, "tts", ["type", "base_url", "model", "voice", "format", "speed", "api_key_env", "timeout_s", "profile", "profiles"]);
+  const tts = section(raw, "tts", ["type", "base_url", "model", "voice", "format", "speed", "api_key_env", "timeout_s", "profile", "profiles", "original_base_url"]);
   const image = section(raw, "image", ["type", "renderer", "theme"]);
   const serve = section(raw, "serve", ["mode", "port", "https_port"]);
   const privacy = section(raw, "privacy", ["redact", "max_input_chars", "evidence_hosts"]);
   const trigger = section(raw, "trigger", ["min_chars", "require_tool_use", "opt_in_tag"]);
   const script = section(raw, "script", ["style"]);
+  const orca = section(raw, "orca", ["audio"]);
 
   const cfg: Config = {
     llm: {
@@ -180,6 +187,7 @@ export function parseConfig(text: string): Config {
       api_key_env: pick(tts, "tts", "api_key_env", d.tts.api_key_env, isStr, "a string"),
       timeout_s: pick(tts, "tts", "timeout_s", d.tts.timeout_s, isNum, "a positive number"),
       profile: pick(tts, "tts", "profile", d.tts.profile, isStr, "a string"),
+      original_base_url: pick(tts, "tts", "original_base_url", d.tts.original_base_url, isStr, "a string"),
     },
     image: {
       type: pick(image, "image", "type", d.image.type, oneOf("mermaid", "none"), "mermaid or none"),
@@ -202,6 +210,7 @@ export function parseConfig(text: string): Config {
       opt_in_tag: pick(trigger, "trigger", "opt_in_tag", d.trigger.opt_in_tag, isBool, "true or false"),
     },
     script: { style: pick(script, "script", "style", d.script.style, oneOf("story", "brief"), "story or brief") },
+    orca: { audio: pick(orca, "orca", "audio", d.orca.audio, oneOf("stream", "inline"), "stream or inline") },
   };
   applyTtsProfile(cfg, tts.profiles);
   if (cfg.llm.type === "openai-compatible" && !cfg.llm.base_url) {
