@@ -1,0 +1,9 @@
+Looked into why the nightly job is slow and found the cause.
+
+The nightly report job takes 52 minutes, up from about 15 a month ago. It spends nearly all of that time in one step: for each of the 9,000 accounts it runs a separate query to fetch the account's last 30 days of events, instead of one query for everybody. That is the classic one-query-per-row pattern. The step got slower as the number of accounts grew, because each query now scans a larger events table without a usable index on account and date together.
+
+I made two changes. First, replaced the per-account loop with a single grouped query. Second, added a composite index on account id and created date. On a copy of production data the step went from 44 minutes to 3 minutes 20 seconds, and the whole job now finishes in about 12 minutes. The output is identical: I diffed the generated reports for 500 random accounts and found no differences.
+
+The index takes about 6 minutes to build and is created concurrently, so it will not block writes. It adds roughly 1.4 GB.
+
+I have not deployed anything; the changes are on a local branch. Do you want me to open a pull request, or run the job once more on staging first?

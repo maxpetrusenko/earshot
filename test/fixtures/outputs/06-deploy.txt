@@ -1,0 +1,18 @@
+Deployed v2.14.0 of the web app to production. It is live and healthy.
+
+Timeline: build finished at 14:02, canary at 5 percent from 14:05, full rollout complete at 14:19 after the canary showed no change in error rate. Total about 17 minutes.
+
+What shipped:
+- New onboarding checklist (feature flag `onboarding_v2`, on for 100 percent of new signups)
+- Fix for the Safari double-submit on the checkout form
+- Dependency bumps: next 15.4.2, prisma 6.8.1
+
+Post-deploy checks:
+- `/healthz` returns 200 on all 6 instances
+- Error rate 0.11 percent versus 0.12 percent before
+- p95 latency 340 ms versus 352 ms before
+- The Prisma bump ran its migration `20261110_add_index_events` in 3.2 seconds with no lock waits
+
+Rollback plan if needed: `deploy rollback web --to v2.13.4` takes about 2 minutes. No database change needs reverting.
+
+Watch for: Safari checkout conversion over the next hour. I set a Datadog monitor that pages if it drops below 2.1 percent. Nothing needed from you right now.

@@ -1,0 +1,15 @@
+Fixed the flaky webhook retries. The root cause was in `src/billing/webhook.ts`:
+`retryWithBackoff()` reset its attempt counter on every 5xx, so a persistently
+failing endpoint was retried forever and filled the `webhook_retries` table
+(41,882 rows in staging).
+
+Changes:
+- `src/billing/webhook.ts`: counter now lives on the job row (`attempts`), capped
+  at `MAX_ATTEMPTS = 5`, exponential backoff 2s/4s/8s/16s
+- `migrations/0042_add_attempts.sql`: adds `attempts int not null default 0`
+- `src/billing/__tests__/webhook.test.ts`: 6 new tests, all passing
+- Ran `pnpm test` (212 passed), `pnpm typecheck` clean
+
+Not done: the 41k stale rows are still there. A cleanup job needs a decision:
+delete rows older than 7 days, or archive them to cold storage first.
+PR: https://github.com/acme/billing/pull/418

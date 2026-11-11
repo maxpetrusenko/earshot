@@ -1,0 +1,12 @@
+Fixed the duplicate invoice emails. Root cause: `sendInvoice()` in `src/billing/mailer.ts` was called from both the `invoice.paid` webhook handler and the nightly reconcile job, and neither checked whether the email had already gone out. Customers who paid between 23:50 and 00:10 UTC got two copies.
+
+Changes:
+- `src/billing/mailer.ts`: new `sent_at` guard, set inside the same transaction that inserts the outbox row
+- `migrations/0057_invoice_sent_at.sql`: adds `sent_at timestamptz` to `invoices`, backfilled from the outbox table (4,112 rows)
+- `src/billing/__tests__/mailer.test.ts`: 5 new tests including a concurrent double-call, all passing
+
+Verification: `pnpm test` 318 passed, `pnpm typecheck` clean. I replayed last Tuesday's webhook payloads against a staging copy and got exactly one email per invoice (212 of 212).
+
+Not done: the 37 customers who already received duplicates are not notified. That is a support decision, not a code one.
+
+PR: https://github.com/acme-co/billing-api/pull/1482

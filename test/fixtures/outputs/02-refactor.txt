@@ -1,0 +1,13 @@
+Refactor complete: the auth middleware is now split into three modules and the Express session code is gone.
+
+What moved:
+- `src/auth/index.ts` (612 lines) became `src/auth/session.ts` (148), `src/auth/tokens.ts` (203) and `src/auth/guards.ts` (97)
+- `requireUser`, `requireAdmin` and `requireOrgMember` now share one `resolvePrincipal()` instead of three copies of the same cookie parsing
+- Removed `express-session` and `connect-redis` from package.json; sessions are signed cookies only, same format as before so nobody gets logged out
+- Public exports are unchanged, so no call sites needed edits outside `src/auth`
+
+Checks: 241 existing tests pass without modification, which was the goal. Added 9 tests for `resolvePrincipal` edge cases (expired, tampered, wrong audience). Lint and typecheck clean. Bundle size for the API went from 4.1 MB to 3.7 MB.
+
+One behavior note: expired cookies used to return 401 with an HTML body in one path and JSON in the others. They now all return JSON. If any client depended on the HTML body, it will break; I found no such client in this repo.
+
+Suggest we merge this before the Friday freeze. Want me to open the PR?

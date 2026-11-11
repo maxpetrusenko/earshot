@@ -1,0 +1,10 @@
+{
+  "type": "agent-turn-complete",
+  "thread-id": "0000aaaa-0000-7000-8000-000000000001",
+  "turn-id": "t2",
+  "cwd": "/work/demo",
+  "input-messages": [
+    "Now add a test."
+  ],
+  "last-assistant-message": "Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. Added the test and it passes: three cases. "
+}

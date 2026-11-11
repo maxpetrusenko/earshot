@@ -1,0 +1,13 @@
+Answer: for your workload, use Redis Streams, not Kafka, for the first year.
+
+I compared the two against your numbers (about 800 events per second peak, 6 consumers, 7 day retention, no cross-region needs, a team of three with no Kafka experience).
+
+Findings:
+- Throughput is not the issue. A single Redis 7 node handled 12,000 events per second in the benchmark I ran locally (`bench/streams.js`), 15 times your peak.
+- Operations are the real cost. Managed Kafka starts around 380 dollars a month for the smallest production tier; your existing Redis already runs in the same VPC at no extra cost.
+- Retention is the weak spot. Streams keep data in memory, so 7 days at your volume is roughly 9 GB. That fits, but it grows linearly. Past about 5x current traffic you would need to move to Kafka or Redpanda.
+- Replay and consumer groups work the same way for your use case. Exactly-once is not available in either without extra work, so your consumers need idempotency keys regardless.
+
+Sources I used: the Redis Streams docs, Confluent's sizing guide, and two public postmortems from teams that migrated in each direction.
+
+Recommendation: start on Streams, write consumers against a thin interface, and revisit at 4,000 events per second sustained. Want me to sketch that interface?

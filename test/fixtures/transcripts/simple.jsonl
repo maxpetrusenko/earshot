@@ -1,0 +1,2 @@
+{"parentUuid":null,"isSidechain":false,"sessionId":"sess-0001","cwd":"/work/demo","version":"2.1.322","uuid":"u-3","timestamp":"2026-11-10T20:00:00.000Z","type":"user","message":{"role":"user","content":"Please say hi."},"promptId":"prompt-A"}
+{"parentUuid":null,"isSidechain":false,"sessionId":"sess-0001","cwd":"/work/demo","version":"2.1.322","uuid":"u-4","timestamp":"2026-11-10T20:00:00.000Z","type":"assistant","message":{"id":"msg-3","role":"assistant","model":"claude-synthetic","content":[{"type":"text","text":"Hi there. This is the whole reply."}],"stop_reason":null}}

@@ -1,0 +1,7 @@
+{"ordinal": 0, "timestamp": "2026-11-10T15:00:00.000Z", "type": "session_meta", "payload": {"id": "0000aaaa-0000-7000-8000-000000000003", "session_id": "0000aaaa-0000-7000-8000-000000000003", "cwd": "/work/demo", "cli_version": "0.0.0-synthetic", "originator": "synthetic", "source": "cli"}}
+{"ordinal": 1, "timestamp": "2026-11-10T15:00:01.000Z", "type": "event_msg", "payload": {"type": "task_started", "turn_id": "t1"}}
+{"ordinal": 2, "timestamp": "2026-11-10T15:00:02.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Old style task."}]}}
+{"ordinal": 3, "timestamp": "2026-11-10T15:00:03.000Z", "type": "response_item", "payload": {"type": "function_call", "name": "shell", "arguments": "{}", "call_id": "c1"}}
+{"ordinal": 4, "timestamp": "2026-11-10T15:00:04.000Z", "type": "response_item", "payload": {"type": "function_call_output", "call_id": "c1", "output": "ok"}}
+{"ordinal": 5, "timestamp": "2026-11-10T15:00:05.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Older log without a phase field: the answer."}]}}
+{"ordinal": 6, "timestamp": "2026-11-10T15:00:06.000Z", "type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t1", "last_agent_message": "Older log without a phase field: the answer."}}

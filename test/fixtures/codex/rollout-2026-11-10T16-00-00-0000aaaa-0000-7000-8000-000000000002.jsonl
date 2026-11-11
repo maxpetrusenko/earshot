@@ -1,0 +1,8 @@
+{"timestamp": "2026-11-10T15:00:00.000Z", "type": "session_meta", "payload": {"id": "0000aaaa-0000-7000-8000-000000000002", "session_id": "0000aaaa-0000-7000-8000-000000000002", "cwd": "/work/demo", "cli_version": "0.0.0-synthetic", "originator": "synthetic", "source": "cli"}}
+{"timestamp": "2026-11-10T15:00:01.000Z", "type": "event_msg", "payload": {"type": "task_started", "turn_id": "t1"}}
+{"timestamp": "2026-11-10T15:00:02.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "First task."}]}}
+{"timestamp": "2026-11-10T15:00:03.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "First task answer."}], "phase": "final_answer"}}
+{"timestamp": "2026-11-10T15:00:04.000Z", "type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t1", "last_agent_message": "First task answer."}}
+{"timestamp": "2026-11-10T15:00:05.000Z", "type": "event_msg", "payload": {"type": "task_started", "turn_id": "t2"}}
+{"timestamp": "2026-11-10T15:00:06.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Second task."}]}}
+{"timestamp": "2026-11-10T15:00:07.000Z", "type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t2", "last_agent_message": null, "error": {"message": "synthetic usage limit", "codex_error_info": "usage_limit_exceeded"}}}

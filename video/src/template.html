@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=@@W@@, height=@@H@@" />
+<script src="assets/gsap.min.js"></script>
+<style>
+@font-face { font-family: "Newsreader"; font-weight: 500; src: url("assets/fonts/newsreader-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-weight: 400; src: url("assets/fonts/source-sans-3-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-weight: 600; src: url("assets/fonts/source-sans-3-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; src: url("assets/fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 500; src: url("assets/fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: @@W@@px; height: @@H@@px; overflow: hidden; background: #faf7f2; }
+#root {
+  --paper: #faf7f2; --paper-deep: #f1ebdd; --ink: #1b1b18; --muted: #5b5a52; --rule: #ddd5c3; --green: #1f6f5c; --card: #fffdf8;
+  position: relative; width: @@W@@px; height: @@H@@px; overflow: hidden; color: var(--ink);
+  font-family: "Source Sans 3", "Helvetica Neue", sans-serif;
+  background:
+    radial-gradient(1100px 600px at 88% -10%, #efe6d2 0%, rgba(239,230,210,0) 70%),
+    radial-gradient(900px 560px at -8% 108%, #e6efe9 0%, rgba(230,239,233,0) 70%),
+    var(--paper);
+}
+.scene { position: absolute; inset: 0; }
+.serif { font-family: "Newsreader", Georgia, serif; font-weight: 500; letter-spacing: -0.015em; }
+.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+/* scene 1: wall of text */
+#wall { position: absolute; inset: 0; padding: 90px 110px; }
+.wall-text { color: var(--muted); font-family: "IBM Plex Mono", monospace; }
+.wl { margin-bottom: 14px; }
+#hook { position: absolute; left: 0; right: 0; top: 50%; margin-top: -170px; text-align: center; padding: 0 90px; }
+#hook-back { position: absolute; left: 0; right: 0; top: 50%; margin-top: -250px; height: 440px; background: rgba(250,247,242,0.93); }
+#hook-line { font-size: 104px; line-height: 1.08; }
+#hook-rule { width: 520px; height: 8px; background: var(--green); margin: 26px auto 0; transform-origin: left center; border-radius: 4px; }
+
+/* terminal */
+.cap-top { position: absolute; left: 0; right: 0; text-align: center; }
+.term { position: absolute; background: var(--card); border: 2px solid var(--rule); border-radius: 22px; box-shadow: 0 24px 60px rgba(60,50,20,0.10); overflow: hidden; }
+.term-bar { height: 52px; border-bottom: 2px solid var(--rule); background: var(--paper-deep); display: flex; align-items: center; gap: 10px; padding: 0 22px; }
+.term-bar i { width: 14px; height: 14px; border-radius: 50%; background: #cfc6b0; display: block; }
+.term-bar span { margin-left: 14px; color: var(--muted); font-size: 20px; }
+.term-body { padding: 28px 34px; line-height: 1.5; }
+.t-user { color: var(--ink); font-weight: 500; }
+.t-dim { color: var(--muted); }
+.t-final { color: var(--ink); }
+#listen { margin-top: 24px; padding: 16px 22px; border-radius: 14px; background: #e3efe9; border: 2px solid var(--green); color: var(--green); font-weight: 500; position: relative; }
+#tap { position: absolute; width: 90px; height: 90px; border-radius: 50%; border: 5px solid var(--green); opacity: 0; }
+
+/* phone */
+.phone { position: absolute; background: #1b1b18; padding: 14px; }
+.phone-screen { overflow: hidden; background: var(--paper); position: relative; }
+.screen { position: absolute; left: 0; top: 0; width: 390px; height: 844px; transform-origin: 0 0; overflow: hidden; }
+.screen .inner { position: relative; width: 390px; }
+.screen h1 { font-size: 31.2px; }
+.screen .sketch { position: relative; }
+#sk-cover { position: absolute; left: 6px; top: 6px; right: 6px; bottom: 6px; background: var(--paper); transform-origin: center bottom; }
+.pause { position: absolute; width: 22px; height: 26px; background: linear-gradient(90deg, #fff 0 36%, transparent 36% 64%, #fff 64% 100%); opacity: 0; }
+#tap2 { position: absolute; width: 76px; height: 76px; border-radius: 50%; border: 3px solid var(--green); opacity: 0; pointer-events: none; }
+
+/* captions beside/above phone */
+.cap { position: absolute; }
+.cap h2 { font-weight: 500; }
+.cap p { color: var(--muted); }
+.pipe { position: absolute; display: flex; align-items: center; }
+.box { background: var(--card); border: 2px solid var(--green); border-radius: 12px; color: var(--ink); display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 600; flex: none; }
+.arr { height: 3px; background: var(--green); position: relative; flex: none; transform-origin: left center; }
+.arr:after { content: ""; position: absolute; right: -2px; top: -6px; border-style: solid; border-width: 7px 0 7px 12px; border-color: transparent transparent transparent var(--green); }
+.stats { position: absolute; color: var(--green); font-weight: 500; }
+
+/* scene 5 and 6 */
+.code { position: absolute; background: var(--card); border: 2px solid var(--rule); border-radius: 22px; padding: 34px 42px; line-height: 1.6; color: var(--ink); white-space: pre; box-shadow: 0 24px 60px rgba(60,50,20,0.10); }
+.code b { color: var(--green); font-weight: 500; }
+.card3 { position: absolute; background: var(--card); border: 2px solid var(--rule); border-radius: 22px; padding: 30px 34px; }
+.card3 h3 { font-weight: 500; }
+.card3 .cmd { margin: 14px 0 12px; color: var(--green); font-weight: 500; }
+.card3 p { color: var(--muted); }
+.end-name { text-align: center; }
+
+/* Landscape layout */
+.L #wall .wall-text { column-count: 2; column-gap: 70px; font-size: 25px; line-height: 1.42; }
+.L #hook-line { font-size: 112px; }
+.L .cap-top { top: 70px; font-size: 62px; }
+.L .term { left: 170px; top: 190px; width: 1580px; }
+.L .term-body { font-size: 34px; padding: 40px 48px; }
+.L #listen { font-size: 36px; }
+.L .phone { left: 1260px; top: 55px; width: 454px; height: 970px; border-radius: 68px; }
+.L .phone-screen { width: 426px; height: 942px; border-radius: 54px; }
+.L .screen { transform: scale(1.0923); }
+.L .cap { left: 130px; width: 980px; }
+.L .cap h2 { font-size: 78px; line-height: 1.08; }
+.L .cap p { font-size: 34px; line-height: 1.4; margin-top: 22px; }
+.L #capA { top: 250px; } .L #capB { top: 250px; }
+.L .pipe { left: 130px; top: 640px; }
+.L .box { width: 150px; height: 96px; font-size: 25px; line-height: 1.15; }
+.L .arr { width: 46px; }
+.L .stats { left: 130px; top: 770px; font-size: 29px; }
+.L #voice-title { left: 140px; top: 270px; font-size: 128px; line-height: 1.02; width: 760px; }
+.L #voice-sub { left: 140px; top: 640px; font-size: 38px; line-height: 1.4; width: 720px; color: var(--muted); position: absolute; }
+.L .code { left: 960px; top: 250px; font-size: 31px; width: 820px; }
+.L #works-title { left: 0; right: 0; top: 110px; text-align: center; font-size: 96px; position: absolute; }
+.L .card3 { top: 360px; width: 520px; height: 340px; }
+.L #c1 { left: 130px; } .L #c2 { left: 700px; } .L #c3 { left: 1270px; }
+.L .card3 h3 { font-size: 52px; } .L .card3 .cmd { font-size: 28px; line-height: 1.4; } .L .card3 p { font-size: 29px; }
+.L #narrate-note { left: 0; right: 0; top: 850px; text-align: center; font-size: 30px; color: var(--muted); position: absolute; }
+.L .end-name { font-size: 230px; margin-top: 270px; }
+.L #end-tag { font-size: 54px; margin-top: 14px; text-align: center; color: var(--muted); }
+.L #end-url { font-size: 38px; margin-top: 70px; text-align: center; color: var(--green); font-weight: 500; }
+
+/* Vertical layout (1080 x 1350) */
+.V #wall .wall-text { font-size: 24px; line-height: 1.4; }
+.V #wall { padding: 70px 70px; }
+.V #hook-line { font-size: 108px; }
+.V .cap-top { top: 70px; font-size: 56px; padding: 0 60px; }
+.V .term { left: 50px; top: 260px; width: 980px; }
+.V .term-body { font-size: 22px; }
+.V #listen { font-size: 22px; }
+.V .phone { left: 303px; top: 365px; width: 474px; height: 962px; border-radius: 66px; }
+.V .phone-screen { width: 446px; height: 934px; border-radius: 52px; }
+.V .screen { transform: scale(1.1436); }
+.V .cap { left: 60px; width: 960px; text-align: center; }
+.V .cap h2 { font-size: 56px; line-height: 1.08; }
+.V .cap p { font-size: 28px; line-height: 1.3; margin-top: 10px; }
+.V #capA { top: 70px; } .V #capB { top: 70px; }
+.V .pipe { left: 95px; top: 232px; }
+.V .box { width: 150px; height: 70px; font-size: 21px; line-height: 1.1; }
+.V .arr { width: 48px; }
+.V .stats { left: 0; right: 0; top: 318px; font-size: 25px; text-align: center; }
+.V #voice-title { left: 60px; right: 60px; top: 150px; font-size: 118px; line-height: 1.02; text-align: center; }
+.V #voice-sub { left: 60px; right: 60px; top: 430px; font-size: 38px; line-height: 1.35; text-align: center; color: var(--muted); position: absolute; }
+.V .code { left: 70px; top: 650px; font-size: 30px; width: 940px; }
+.V #works-title { left: 0; right: 0; top: 90px; text-align: center; font-size: 84px; position: absolute; line-height: 1.05; padding: 0 60px; }
+.V .card3 { left: 70px; width: 940px; height: 270px; padding: 24px 34px; }
+.V #c1 { top: 330px; } .V #c2 { top: 630px; } .V #c3 { top: 930px; }
+.V .card3 h3 { font-size: 46px; } .V .card3 .cmd { font-size: 24px; margin: 8px 0 8px; } .V .card3 p { font-size: 28px; }
+.V #narrate-note { left: 60px; right: 60px; top: 1230px; text-align: center; font-size: 26px; color: var(--muted); position: absolute; }
+.V .end-name { font-size: 220px; margin-top: 380px; }
+.V #end-tag { font-size: 52px; margin-top: 14px; text-align: center; color: var(--muted); padding: 0 60px; }
+.V #end-url { font-size: 36px; margin-top: 70px; text-align: center; color: var(--green); font-weight: 500; }
+
+/* card styles, scoped */
+@@CARD_CSS@@
+</style>
+</head>
+<body>
+<div id="root" class="@@CLS@@" data-composition-id="main" data-start="0" data-duration="72" data-width="@@W@@" data-height="@@H@@">
+
+  <!-- 1. hook -->
+  <div id="s1" class="scene clip" data-start="0" data-duration="6.2">
+    <div id="wall" data-layout-allow-overlap data-layout-allow-overflow><div class="wall-text">@@WALL@@</div></div>
+    <div id="hook" data-layout-allow-overlap><div id="hook-line" class="serif">You can't read this while driving.</div><div id="hook-rule"></div></div>
+  </div>
+
+  <!-- 2. session ends -->
+  <div id="s2" class="scene clip" data-start="5.8" data-duration="6.6">
+    <div class="cap-top serif" id="s2-cap">The session ends. A link appears.</div>
+    <div class="term" id="term">
+      <div class="term-bar"><i></i><i></i><i></i><span class="mono">claude</span></div>
+      <div class="term-body mono">
+        <div class="tl t-user">&gt; fix the flaky billing webhook retries</div>
+        <div class="tl t-dim">&nbsp;&nbsp;Edit src/billing/webhook.ts</div>
+        <div class="tl t-dim">&nbsp;&nbsp;Bash pnpm test</div>
+        <div class="tl t-final" style="margin-top:18px">Fixed the flaky webhook retries. The root cause was in `src/billing/webhook.ts`: `retryWithBackoff()` reset its attempt counter on every 5xx, so a persistently failing endpoint was retried forever and filled the `webhook_retries` table (41,882 rows in staging).</div>
+        <div class="tl t-dim" style="margin-top:12px">...</div>
+        <div id="listen" class="tl mono">Listen: https://&lt;host&gt;.&lt;tailnet&gt;.ts.net:8443/b/&lt;id&gt;<div id="tap"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3 and 4. the card on a phone, audio -->
+  <div id="s3" class="scene clip" data-start="11.8" data-duration="43.6">
+    <div class="cap serif-wrap" id="capA"><h2 class="serif">One tap opens the card.</h2></div>
+    <div class="cap" id="capB"><h2 class="serif">Written for the ear, not the eye.</h2><p>The report is rewritten as something you would say out loud, then spoken.</p></div>
+    <div class="pipe" id="pipe">
+      <div class="box" id="b1">Extract</div><div class="arr" id="a1"></div>
+      <div class="box" id="b2">Scrub</div><div class="arr" id="a2"></div>
+      <div class="box" id="b3">Ear script</div><div class="arr" id="a3"></div>
+      <div class="box" id="b4">Voice + sketch</div><div class="arr" id="a4"></div>
+      <div class="box" id="b5">Card</div>
+    </div>
+    <div class="stats mono" id="stats">ear script @@STAGE_ENGINE@@ s &nbsp;/&nbsp; voice @@STAGE_TTS@@ s &nbsp;/&nbsp; ready in @@STAGE_TOTAL@@ s</div>
+    <div class="phone" id="phone"><div class="phone-screen" data-layout-allow-overflow data-layout-allow-overlap><div class="screen" data-layout-allow-overflow data-layout-allow-overlap>
+      <div class="inner" id="inner" data-layout-allow-overflow data-layout-allow-overlap>
+        <main>
+          <header><h1>@@TITLE@@</h1><p class="byline">Agent report, 8:03 PM</p></header>
+          <section class="player" style="position:relative">
+            <button id="play" class="play" type="button"><span class="icon" id="play-icon"></span><span class="pause" id="pause-icon"></span></button>
+            <div class="timeline"><input id="seek" type="range" min="0" max="1000" value="0"><span id="time" class="time">0:00 / @@AUDIO_SHOWN@@</span></div>
+            <div class="extras"><button type="button">Back 10</button><button type="button">1x</button></div>
+            <div id="tap2"></div>
+          </section>
+          <section class="sketch"><img src="assets/sketch.svg" alt=""><div id="sk-cover"></div></section>
+          <p class="evidence"><a>Evidence</a></p>
+          <details class="transcript" open><summary>Transcript</summary><p>@@TRANSCRIPT@@</p></details>
+        </main>
+      </div>
+    </div></div></div>
+  </div>
+
+  <!-- 5. pluggable voice -->
+  <div id="s5" class="scene clip" data-start="54.8" data-duration="6.4" style="background:#faf7f2">
+    <div id="voice-title" class="serif" style="position:absolute">Pluggable voice.</div>
+    <div id="voice-sub">Any OpenAI-compatible speech endpoint. Swap the voice in one config block.</div>
+    <div class="code mono" id="code">tts:
+  type: <b>openai-compatible</b>
+  base_url: http://localhost:8880/v1
+  model: <b>kokoro</b>
+  voice: af_heart
+  format: mp3</div>
+  </div>
+
+  <!-- 6. integrations -->
+  <div id="s6" class="scene clip" data-start="60.8" data-duration="6.4" style="background:#faf7f2">
+    <div id="works-title" class="serif">Works with Claude Code, Codex and MCP.</div>
+    <div class="card3" id="c1"><h3 class="serif">Claude Code</h3><div class="cmd mono">earshot install claude-code</div><p>A skill, or a Stop hook.</p></div>
+    <div class="card3" id="c2"><h3 class="serif">Codex</h3><div class="cmd mono">earshot install codex</div><p>A notify program.</p></div>
+    <div class="card3" id="c3"><h3 class="serif">MCP</h3><div class="cmd mono">earshot install mcp --client claude-code</div><p>A narrate tool.</p></div>
+    <div id="narrate-note" class="mono">Or end any output with &lt;narrate&gt;...&lt;/narrate&gt;</div>
+  </div>
+
+  <!-- 7. end card -->
+  <div id="s7" class="scene clip" data-start="66.8" data-duration="5.2" style="background:#faf7f2">
+    <div class="end-name serif" id="end-name">earshot</div>
+    <div id="end-tag" class="serif">Hear what your agent did.</div>
+    <div id="end-url" class="mono">github.com/maxpetrusenko/earshot</div>
+  </div>
+
+  <audio id="memo" src="assets/memo.mp3" data-start="13.2" data-duration="@@AUDIO_LEN@@" data-track-index="9" data-volume="1" data-fade-out="0.3"></audio>
+</div>
+
+<script>
+window.__timelines = window.__timelines || {};
+const tl = gsap.timeline({ paused: true });
+const E = "power3.out";
+const AUDIO_START = 13.2, AUDIO_LEN = @@AUDIO_LEN@@;
+const fade = (sel, a, b, inD = 0.4, outD = 0.4) => {
+  tl.set(sel, { opacity: 0 }, 0);
+  tl.fromTo(sel, { opacity: 0 }, { opacity: 1, duration: inD, ease: "none" }, a);
+  tl.to(sel, { opacity: 0, duration: outD, ease: "none" }, b - outD);
+};
+
+// scene 1: frame 0 already shows the wall of text
+tl.fromTo(".wl", { opacity: 0.0 }, { opacity: 1, duration: 0.01, stagger: 0.012 }, 0);
+tl.set("#hook", { opacity: 0 }, 0);
+tl.to(".wall-text", { opacity: 0.12, duration: 0.6, ease: "none" }, 1.6);
+tl.fromTo("#hook", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.6, ease: E }, 1.8);
+tl.fromTo("#hook-rule", { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: "power2.inOut" }, 2.6);
+tl.to("#s1", { opacity: 0, duration: 0.4, ease: "none" }, 5.8);
+
+// scene 2
+tl.set("#s2", { opacity: 0 }, 0);
+tl.fromTo("#s2", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "none" }, 5.8);
+tl.fromTo("#s2-cap", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 6.2);
+tl.fromTo("#term", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: E }, 6.3);
+tl.fromTo(".tl", { opacity: 0 }, { opacity: 1, duration: 0.25, stagger: 0.28 }, 6.8);
+tl.fromTo("#tap", { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.35, ease: E }, 10.2);
+tl.to("#tap", { opacity: 0, scale: 1.5, duration: 0.4, ease: "none" }, 10.55);
+tl.to("#s2", { opacity: 0, duration: 0.4, ease: "none" }, 12.0);
+
+// scene 3/4
+tl.set("#s3", { opacity: 0 }, 0);
+tl.fromTo("#s3", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "none" }, 11.8);
+tl.fromTo("#phone", { y: 90 }, { y: 0, duration: 0.8, ease: E }, 11.8);
+tl.set("#capB", { opacity: 0 }, 0);
+tl.set("#stats", { opacity: 0 }, 0);
+tl.fromTo("#capA", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 12.2);
+tl.to("#capA", { opacity: 0, duration: 0.3, ease: "none" }, 19.6);
+tl.fromTo("#capB", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 19.9);
+tl.to("#capB", { opacity: 0, duration: 0.4, ease: "none" }, 54.0);
+tl.fromTo("#stats", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "none" }, 24);
+// pipeline draws in
+tl.set(["#b1","#b2","#b3","#b4","#b5"], { opacity: 0 }, 0);
+tl.set(["#a1","#a2","#a3","#a4"], { scaleX: 0 }, 0);
+["b1","a1","b2","a2","b3","a3","b4","a4","b5"].forEach((id, i) => {
+  const isBox = id[0] === "b";
+  const at = 13.2 + i * 0.5;
+  if (isBox) tl.fromTo("#" + id, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35, ease: E }, at);
+  else tl.fromTo("#" + id, { scaleX: 0 }, { scaleX: 1, duration: 0.3, ease: "power2.inOut" }, at);
+});
+tl.to("#pipe", { opacity: 0, duration: 0.4, ease: "none" }, 54.0);
+tl.to("#stats", { opacity: 0, duration: 0.4, ease: "none" }, 54.0);
+tl.to("#phone", { opacity: 0, y: 40, duration: 0.5, ease: "power2.in" }, 54.6);
+tl.to("#s3", { opacity: 0, duration: 0.4, ease: "none" }, 55.0);
+
+// card sketch draws in top to bottom
+tl.fromTo("#sk-cover", { scaleY: 1 }, { scaleY: 0, duration: 1.2, ease: "power2.inOut" }, 12.4);
+// press play
+tl.fromTo("#tap2", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.2, ease: E }, 12.95);
+tl.to("#tap2", { opacity: 0, scale: 1.6, duration: 0.35, ease: "none" }, 13.15);
+tl.to("#play", { scale: 0.94, duration: 0.1, ease: "none" }, 13.05);
+tl.to("#play", { scale: 1, duration: 0.15, ease: "none" }, 13.15);
+tl.set("#play-icon", { opacity: 0 }, AUDIO_START);
+tl.set("#pause-icon", { opacity: 1 }, AUDIO_START);
+tl.set("#play-icon", { opacity: 1 }, AUDIO_START + AUDIO_LEN);
+tl.set("#pause-icon", { opacity: 0 }, AUDIO_START + AUDIO_LEN);
+const seek = document.getElementById("seek");
+const timeEl = document.getElementById("time");
+const fmt = (s) => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+const total = "@@AUDIO_SHOWN@@";
+const prog = { t: 0 };
+tl.to(prog, { t: AUDIO_LEN, duration: AUDIO_LEN, ease: "none", onUpdate: () => {
+  seek.value = String(Math.round((prog.t / AUDIO_LEN) * 1000));
+  timeEl.textContent = fmt(prog.t) + " / " + total;
+} }, AUDIO_START);
+// scroll the card so the whole transcript is readable
+tl.to("#inner", { y: -330, duration: 3, ease: "power2.inOut" }, 21);
+tl.to("#inner", { y: -560, duration: 4, ease: "power2.inOut" }, 34);
+
+// scene 5
+tl.set("#s5", { opacity: 0 }, 0);
+tl.fromTo("#s5", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "none" }, 54.8);
+tl.fromTo("#voice-title", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: E }, 55.2);
+tl.fromTo("#voice-sub", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 55.8);
+tl.fromTo("#code", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: E }, 56.2);
+tl.to("#s5", { opacity: 0, duration: 0.4, ease: "none" }, 60.8);
+
+// scene 6
+tl.set("#s6", { opacity: 0 }, 0);
+tl.fromTo("#s6", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "none" }, 60.8);
+tl.fromTo("#works-title", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: E }, 61.1);
+tl.fromTo(["#c1", "#c2", "#c3"], { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.5, ease: E, stagger: 0.35 }, 61.8);
+tl.fromTo("#narrate-note", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "none" }, 63.6);
+tl.to("#s6", { opacity: 0, duration: 0.4, ease: "none" }, 66.8);
+
+// scene 7
+tl.set("#s7", { opacity: 0 }, 0);
+tl.fromTo("#s7", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "none" }, 66.8);
+tl.fromTo("#end-name", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.7, ease: E }, 67.1);
+tl.fromTo("#end-tag", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "none" }, 67.9);
+tl.fromTo("#end-url", { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "none" }, 68.5);
+
+window.__timelines["main"] = tl;
+tl.seek(0);
+</script>
+</body>
+</html>

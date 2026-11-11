@@ -1,0 +1,11 @@
+.claude
+.codex
+.cursor
+CLAUDE.md
+AGENTS.md
+/agents
+/skills
+node_modules
+dist
+.env
+.DS_Store

@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "EARSHOT_HOOK=1 earshot-hook", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}

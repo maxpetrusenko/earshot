@@ -1,0 +1,9 @@
+node_modules
+build
+assets/memo.mp3
+assets/sketch.svg
+assets/shots
+assets/fonts
+assets/gsap.min.js
+out/*.mp4
+out/frames

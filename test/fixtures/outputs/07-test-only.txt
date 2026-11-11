@@ -1,0 +1,15 @@
+Ran the full test suite and a coverage report. No code changes.
+
+Results:
+- Unit: 1,204 passed, 0 failed, 3 skipped
+- Integration: 186 passed, 2 failed, 0 skipped
+- End to end (Playwright): 41 passed, 0 failed
+- Total time 6 minutes 48 seconds
+
+The 2 failures are both in `test/integration/export.test.ts`: `exports large CSV` and `exports with unicode headers`. They time out at 5 seconds. I ran each alone five times: the large CSV one passes 4 of 5, the unicode one passes 5 of 5, so both look like timing flakes on this machine, not logic errors. Neither touches code changed this week. I did not change the timeout.
+
+Coverage: 87.4 percent lines overall. The lowest areas are `src/jobs/` at 61 percent and `src/admin/` at 58 percent. Both were already low a month ago, so nothing regressed.
+
+Skipped tests: the 3 skips all carry a TODO pointing at issue 774, still open.
+
+Suggest raising the export test timeout to 15 seconds. Should I do that?

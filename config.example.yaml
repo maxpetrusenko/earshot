@@ -1,0 +1,54 @@
+# earshot config. Copy to ~/.config/earshot/config.yaml (or run: earshot init).
+# API keys are never stored here. A key names an environment variable.
+# Unknown keys are an error.
+
+llm:
+  # claude-cli runs `claude -p` on your Claude subscription login. ANTHROPIC_API_KEY is
+  # removed from the child environment, so this never bills API credits.
+  type: claude-cli
+  model: haiku                    # sonnet or haiku
+  timeout_s: 90
+  # command: claude               # binary to run
+  #
+  # Any OpenAI-compatible /chat/completions endpoint instead:
+  # type: openai-compatible
+  # base_url: http://localhost:11434/v1
+  # model: qwen3:8b
+  # api_key_env: ""               # name of the env var, empty for local endpoints
+
+tts:
+  type: openai-compatible         # any /v1/audio/speech endpoint
+  base_url: http://localhost:8880/v1   # Kokoro-FastAPI default
+  model: kokoro
+  voice: af_heart
+  format: mp3
+  speed: 1.0
+  api_key_env: ""                 # empty for local endpoints
+  timeout_s: 120
+
+image:
+  type: mermaid                   # mermaid | none
+  renderer: beautiful-mermaid
+  theme: paper
+
+serve:
+  mode: tailscale-serve           # tailscale-serve | tailnet-ip | loopback
+  port: 7777
+  # tailscale-serve: bind 127.0.0.1 and run `tailscale serve` (tailnet only, never funnel).
+  #   The link is https://<node>.<tailnet>.ts.net. Needs HTTPS enabled for the tailnet.
+  # tailnet-ip: bind the Tailscale IPv4 only, plain http.
+  # loopback: 127.0.0.1 only, link is http://localhost:<port>.
+  https_port: 443                 # tailscale-serve only
+
+privacy:
+  redact: true                    # scrub secret-shaped strings before any network call
+  max_input_chars: 40000
+  evidence_hosts: []              # extra hosts allowed as the evidence link; github.com and gitlab.com always are
+
+trigger:                          # which Claude Code Stop events become a memo (hook mode)
+  min_chars: 400                  # skip short replies such as "done"
+  require_tool_use: true          # skip turns with no tool calls
+  opt_in_tag: false               # true = only narrate when the output contains <narrate>
+
+# Langfuse tracing turns on only when LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY
+# (and optionally LANGFUSE_HOST) are set in the environment.

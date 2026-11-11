@@ -1,0 +1,1 @@
+{"name":"earshot-video","private":true,"type":"module","engines":{"node":">=22"},"devDependencies":{"@fontsource/ibm-plex-mono":"^5.3.0","gsap":"^3.15.1","hyperframes":"^0.9.31"}}

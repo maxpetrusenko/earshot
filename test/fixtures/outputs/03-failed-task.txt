@@ -1,0 +1,14 @@
+I could not finish the Postgres 14 to 16 upgrade script. Stopping here so you can decide.
+
+What worked: `scripts/pg-upgrade.sh` now runs `pg_upgrade --check` cleanly against the staging snapshot, and the extension list (postgis, pg_trgm, pgcrypto) all have PG16 builds available.
+
+What failed: the real upgrade step aborts at "restoring global objects" with `ERROR: role "replicator" already exists`. The new cluster is initialised with a bootstrap role that collides with our replication role. I tried two fixes. Renaming the role in the dump broke the `pg_hba.conf` rules, and dropping it before restore left the standby unable to reconnect. Both attempts are rolled back. Staging is back on 14.11 and healthy, and nothing touched production.
+
+Tests: 0 of the 6 upgrade integration tests pass (they need a completed upgrade). The 31 unrelated tests still pass.
+
+Options:
+1. Recreate the replication role under a new name everywhere (about half a day, needs a config rollout).
+2. Use logical replication to move to a fresh PG16 cluster (no role clash, but a longer cutover, around 40 minutes of read-only).
+3. Delay the upgrade; PG14 is supported until November next year.
+
+I would pick option 2. Which one do you want?

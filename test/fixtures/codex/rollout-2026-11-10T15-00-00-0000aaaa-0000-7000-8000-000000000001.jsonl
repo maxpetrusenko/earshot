@@ -1,0 +1,19 @@
+{"timestamp": "2026-11-10T15:00:00.000Z", "type": "session_meta", "payload": {"id": "0000aaaa-0000-7000-8000-000000000001", "session_id": "0000aaaa-0000-7000-8000-000000000001", "cwd": "/work/demo", "cli_version": "0.0.0-synthetic", "originator": "synthetic", "source": "cli"}}
+{"timestamp": "2026-11-10T15:00:01.000Z", "type": "event_msg", "payload": {"type": "task_started", "turn_id": "t1"}}
+{"timestamp": "2026-11-10T15:00:02.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Add a fizzbuzz function."}]}}
+{"timestamp": "2026-11-10T15:00:03.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Plan: write the file first."}], "phase": "commentary"}}
+{"timestamp": "2026-11-10T15:00:04.000Z", "type": "response_item", "payload": {"type": "function_call", "name": "exec_command", "arguments": "{}", "call_id": "c1"}}
+{"timestamp": "2026-11-10T15:00:05.000Z", "type": "response_item", "payload": {"type": "function_call_output", "call_id": "c1", "output": "ok"}}
+{"timestamp": "2026-11-10T15:00:06.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Done with turn one."}], "phase": "final_answer"}}
+{"timestamp": "2026-11-10T15:00:07.000Z", "type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t1", "last_agent_message": "Done with turn one."}}
+{"timestamp": "2026-11-10T15:00:08.000Z", "type": "event_msg", "payload": {"type": "task_started", "turn_id": "t2"}}
+{"timestamp": "2026-11-10T15:00:09.000Z", "type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "Now add a test."}]}}
+{"timestamp": "2026-11-10T15:00:10.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Looking at the file."}], "phase": "commentary"}}
+{"timestamp": "2026-11-10T15:00:11.000Z", "type": "response_item", "payload": {"type": "custom_tool_call", "name": "apply_patch", "input": "...", "call_id": "c2"}}
+{"timestamp": "2026-11-10T15:00:12.000Z", "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "c2", "output": "ok"}}
+{"timestamp": "2026-11-10T15:00:13.000Z", "type": "response_item", "payload": {"type": "function_call", "name": "exec_command", "arguments": "{}", "call_id": "c3"}}
+{"timestamp": "2026-11-10T15:00:14.000Z", "type": "response_item", "payload": {"type": "function_call_output", "call_id": "c3", "output": "3 passed"}}
+{"timestamp": "2026-11-10T15:00:15.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Running the tests now."}], "phase": "commentary"}}
+{"timestamp": "2026-11-10T15:00:16.000Z", "type": "response_item", "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "Added the test and it passes: three cases.\n\nNext step: wire it into CI."}], "phase": "final_answer"}}
+{"timestamp": "2026-11-10T15:00:17.000Z", "type": "event_msg", "payload": {"type": "task_complete", "turn_id": "t2", "last_agent_message": "Added the test and it passes: three cases.\n\nNext step: wire it into CI."}}
+{"timestamp":"2026-11-10T15:00:18.000Z","type":"event_msg","payload":{"type":"toke

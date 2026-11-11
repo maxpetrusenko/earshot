@@ -1,0 +1,14 @@
+Finished the multi-tenant migration across all five services. Summary of every step, in the order I did them.
+
+1. Audit. Read through the auth, billing, notifications, reports and gateway services and listed every query that touches a tenant-scoped table. Found 63 queries; 11 had no tenant filter at all (mostly in reports).
+2. Schema. Added `tenant_id uuid not null` to 9 tables with a default of the legacy tenant, then backfilled in batches of 10,000. Longest backfill was `report_runs` at 4 minutes 10 seconds for 1.8 million rows.
+3. Row-level security. Enabled RLS on those 9 tables with a policy reading `current_setting('app.tenant_id')`. Wrote `withTenant()` in `packages/db/src/tenant.ts` that sets it per transaction.
+4. Services. Wrapped every repository call in `withTenant()`. Auth and gateway needed the tenant from the JWT claim `tid`; notifications needed it from the job payload, so I added `tenant_id` to the queue message schema, version 2, with the old version still readable.
+5. The 11 unfiltered queries. Fixed 9 by routing through `withTenant()`. The other 2, in `reports/src/export-all.ts`, intentionally span tenants for the internal admin export. I left them on a separate database role that bypasses RLS and added a comment and a test that asserts the role name.
+6. Tests. 412 tests pass across the five services (was 371). New cross-tenant leak tests: 41, each tries to read another tenant's row and expects zero results.
+7. Load test. p95 on the gateway went from 118 ms to 131 ms with RLS on. Within the 150 ms budget.
+8. Rollout plan. Written to `docs/migrations/multi-tenant.md`: deploy schema, deploy services with the flag off, flip the flag per service, then remove the legacy default.
+
+Open risk: the old queue messages still in flight during rollout have no `tenant_id`. The consumer treats those as the legacy tenant. If you have messages older than 7 days in the dead-letter queue, they would be attributed wrongly.
+
+Decision needed: ship the flag flip this week, or wait until the dead-letter queue is drained?

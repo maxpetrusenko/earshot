@@ -1,0 +1,16 @@
+Opened a PR that adds rate limiting to the public search API.
+
+https://github.com/acme-co/search-service/pull/903
+
+Summary:
+- New middleware `rateLimit()` in `src/middleware/rate-limit.ts` using a sliding window stored in Redis, keyed by API key then IP
+- Limits: 60 requests per minute for anonymous callers, 600 for keyed callers, configurable in `config/limits.yaml`
+- Responses over the limit return 429 with a `Retry-After` header
+- Added `RATE_LIMIT_ENABLED` flag, default off, so we can deploy dark and turn it on per environment
+- 14 new tests, including a clock-skew case and a Redis-down case where requests fail open
+
+CI: all 7 checks green, coverage 91.2 percent (up 0.4).
+
+Reviewers: I requested Priya and Daniel. The one thing worth a human look is the fail-open choice when Redis is unreachable. I chose availability over strictness; if you would rather fail closed, it is a one-line change in `rate-limit.ts` line 58.
+
+Next: after merge, enable the flag in staging for a day and watch the 429 rate before production.
