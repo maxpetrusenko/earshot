@@ -40,6 +40,10 @@ const hookLog = (line: string) => {
   }
 };
 
+/** An earshot link in the reply: the skill already ran, so the hook must not narrate the same reply again. */
+const EARSHOT_LINK = /\/b\/[A-Za-z0-9]{16}\/(?:edited|original)\.mp3\b/;
+export const hasEarshotLink = (text: string): boolean => EARSHOT_LINK.test(text);
+
 export type Decision = { narrate: true; text: string; toolUses: number } | { narrate: false; reason: string };
 
 /** The final message of the turn plus the trigger gate. Pure of side effects except transcript reads. */
@@ -60,6 +64,7 @@ export async function decide(p: StopPayload, cfg: Config, waitMs = 1000): Promis
   } else {
     return { narrate: false, reason: "payload has no last_assistant_message and no transcript_path" };
   }
+  if (hasEarshotLink(text)) return { narrate: false, reason: "reply already has an earshot link (skill ran)" };
   const tagged = applyTag(text, cfg.trigger.opt_in_tag);
   if (tagged === null) return { narrate: false, reason: "opt_in_tag is on and the message has no <narrate>" };
   if (tagged.length < cfg.trigger.min_chars) return { narrate: false, reason: `shorter than min_chars (${tagged.length} < ${cfg.trigger.min_chars})` };

@@ -49,7 +49,24 @@ Source: https://code.claude.com/docs/en/hooks (Stop section), checked 2026-11-10
 | `last_assistant_message` | the final response text; preferred over the transcript. The docs say the transcript "isn't guaranteed to include the final message at Stop time", and recommend this field for read-aloud hooks |
 | `background_tasks`, `session_crons` | ignored |
 
-Output: `{"systemMessage": "[Listen](<url>/edited.mp3) · [Listen original](<url>/original.mp3)"}`. The docs list `systemMessage` as a universal field, shown to the user, and the Stop section does not say it is discarded. `systemMessage` also arrives as an informational message in `--output-format stream-json` and the Agent SDK. In plain `claude -p` text mode a Stop hook's message is not printed; skill mode is the way to get a link into `-p` output. Every outcome logs to `~/.earshot/logs/hook.log`. earshot never returns `decision: block`, so it cannot extend a turn.
+Output: `{"systemMessage": "[Listen](<url>/edited.mp3) · [Listen original](<url>/original.mp3)"}`. The docs list `systemMessage` as a universal field, shown to the user, and the Stop section does not say it is discarded. `systemMessage` also arrives as an informational message in `--output-format stream-json` and the Agent SDK. In plain `claude -p` text mode a Stop hook's message is not printed; skill mode is the way to get a link into `-p` output.
+
+### Where `systemMessage` shows up
+
+Tested 2026-11-11 on Claude Code 2.1.322 with a probe Stop hook that returns `{"systemMessage": "PROBE"}`:
+
+| Surface | Result |
+|---|---|
+| `claude -p --output-format stream-json --verbose` | Shown. Arrives as `{"type":"system","subtype":"informational","content":"Stop says: PROBE","level":"notice"}` |
+| `claude -p` plain text | Not printed |
+| Interactive terminal UI | Not tested by us; the hooks docs describe `systemMessage` as a warning shown to the user |
+| `claude remote-control` and the Claude phone app | Not verified. Treat the hook line as not reaching the phone until someone checks it on a device |
+
+For reading on a phone, skill mode is the reliable path: the link is part of Claude's reply, so it travels with the message on every surface.
+
+### Hook and skill together
+
+The hook skips any reply that already contains an earshot link (`/b/<id>/edited.mp3` or `/original.mp3`), so a turn where the skill ran is never narrated twice. When the reply has no link, and the turn passes the trigger gate, the hook starts the brief and returns the markdown line through `systemMessage`. Every outcome logs to `~/.earshot/logs/hook.log`. earshot never returns `decision: block`, so it cannot extend a turn.
 
 ## Transcript fallback
 
