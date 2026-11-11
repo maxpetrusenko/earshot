@@ -2,7 +2,11 @@
 
 Read when: you run Claude Code inside Orca and want to tap Play in the chat instead of opening a link.
 
-Orca's native chat renders an HTML page inline when a reply has `::orca-visual{file="<name>.html" title="..."}` on its own line, with the file in `$ORCA_CHAT_SCRATCH_DIR`. This was confirmed to play on an iPhone in AirPods. earshot writes that page: two big buttons, Play (the edited memo) and Original, a time readout, and only one track plays at a time.
+Orca's native chat renders an HTML page inline when a reply has `::orca-visual{file="<name>.html" title="..."}` on its own line, with the file in `$ORCA_CHAT_SCRATCH_DIR`. earshot writes that page: two big buttons, Play (the edited memo) and Original, a time readout, and only one track plays at a time.
+
+## Status: opt-in, desktop only, unverified
+
+Off by default. The skill and the Stop hook still produce the markdown Listen line. On an iPhone, Orca's inline visuals did not respond to taps: JS buttons did nothing and native `<audio controls>` showed no play button, for both the embedded and the streamed page. Desktop Orca playback has not been checked. Use the plain Listen links on mobile.
 
 ## Use
 
@@ -11,7 +15,7 @@ echo "<agent reply>" | earshot run --format orca
 # ::orca-visual{file="earshot-<id>.html" title="Listen"}
 ```
 
-`earshot install claude-code --mode skill` installs a skill that picks this form when `ORCA_CHAT_SCRATCH_DIR` is set and keeps the markdown Listen line everywhere else. The Stop hook does nothing when the reply already has an earshot `::orca-visual` line.
+Run it yourself, or write your own skill that calls it when `ORCA_CHAT_SCRATCH_DIR` is set. The Stop hook does nothing when the reply already has an earshot `::orca-visual` line.
 
 `--orca-dir <path>` overrides the scratch directory. If it is unset or not writable, or the edited track fails, earshot prints the markdown Listen line instead.
 
