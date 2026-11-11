@@ -144,7 +144,7 @@ describe("Stop hook process", () => {
       const a = await spawnHook(env, payload);
       expect(a.ms).toBeLessThan(2000);
       const msg = JSON.parse(a.out).systemMessage as string;
-      expect(msg).toMatch(/^Listen: http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/edited\.mp3\nListen original: http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/original\.mp3$/);
+      expect(msg).toMatch(/^\[Listen\]\(http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Listen original\]\(http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/original\.mp3\)$/);
       first = msg.split("/b/")[1]!.split("/")[0]!;
       const meta1 = JSON.parse(readFileSync(join(briefDir(first), "meta.json"), "utf8"));
       expect(meta1.status).toBe("pending");

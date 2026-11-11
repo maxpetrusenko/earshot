@@ -1,6 +1,6 @@
 # earshot
 
-Turn a coding agent's finished work into a voice memo and a one-glance diagram, and get back two links that start playing the moment you tap them: `Listen:` for the edited memo and `Listen original:` for your agent's own words.
+Turn a coding agent's finished work into a voice memo and a one-glance diagram, and get back one chat line with two tappable words that start playing the moment you tap them: Listen for the edited memo and Listen original for your agent's own words.
 
 <p align="center"><img src="assets/brand/hero-card.png" alt="The earshot card on a phone: title, player, a top-down four-box diagram and the transcript" width="360"></p>
 
@@ -17,10 +17,16 @@ earshot does that pairing for any agent that can hand it text.
 You need Node 22 or newer, pnpm, and a TTS server. [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) works with the defaults on port 8880. Any OpenAI-compatible `/v1/audio/speech` endpoint works too.
 
 ```bash
-npm i -g earshot        # or: npx earshot <command>
+git clone https://github.com/maxpetrusenko/earshot.git
+cd earshot
+pnpm install
+pnpm build
+pnpm link --global      # puts `earshot` on your PATH
 
 earshot init            # writes ~/.config/earshot/config.yaml
 ```
+
+After the first npm release, `npm i -g earshot` will also work.
 
 A minimal `~/.config/earshot/config.yaml`:
 
@@ -49,20 +55,19 @@ Start the server in one terminal and make a memo from another:
 earshot serve
 
 echo "Fixed the flaky webhook retries. The counter reset on every 5xx, so a dead endpoint was retried forever. Now it stops after five attempts. 212 tests pass. Open question: delete the 41k stale rows or archive them?" | earshot run
-# Listen: http://localhost:7777/b/<id>/edited.mp3
-# Listen original: http://localhost:7777/b/<id>/original.mp3
+# [Listen](http://localhost:7777/b/<id>/edited.mp3) · [Listen original](http://localhost:7777/b/<id>/original.mp3)
 ```
 
-Open either link. Audio starts while the memo is still being made: the original in about 1.5 seconds, the edited memo in about 4. Both links are one MP3 that keeps growing until the track is complete, then it becomes a normal seekable file. The card with the diagram and transcript is at `/b/<id>`; `--format json` prints `{listen, listen_original, card, id}`.
+Tap either word (or open the URL). Audio starts while the memo is still being made: the original in about 1.5 seconds, the edited memo in about 4. Both links are one MP3 that keeps growing until the track is complete, then it becomes a normal seekable file. The card with the diagram and transcript is at `/b/<id>`; `--format plain` prints the old two lines (`Listen: <url>` and `Listen original: <url>`), and `--format json` prints `{listen, listen_original, card, id}`.
 
 ## Integrations
 
 | Agent | Command | How the link reaches you |
 |---|---|---|
-| Claude Code, skill | `earshot install claude-code` | Claude ends its reply with the two `Listen` lines |
+| Claude Code, skill | `earshot install claude-code` | Claude ends its reply with one line: Listen · Listen original |
 | Claude Code, hook | `earshot install claude-code --mode hook` | Stop hook message in the terminal UI |
 | Codex | `earshot install codex` | `notify` program, link in `~/.earshot/logs/hook.log` |
-| Any MCP client | `earshot install mcp --client claude-code` | the agent calls the `narrate` tool and prints the two links |
+| Any MCP client | `earshot install mcp --client claude-code` | the agent calls the `narrate` tool and prints the one-line links |
 | Anything else | `earshot run --from tagged` | reads the last `<narrate>...</narrate>` block from stdin |
 
 Pick skill or hook mode per scope, not both. Details: [Claude Code](docs/claude-code.md), [Codex](docs/codex.md), [MCP](docs/mcp.md). The installers back up the files they edit and never touch entries they did not write. `earshot uninstall <agent>` undoes them.
@@ -87,7 +92,7 @@ Pick skill or hook mode per scope, not both. Details: [Claude Code](docs/claude-
       +------------+-------------+
                    |
  card + links   ~/.earshot/briefs/<id>/ served by `earshot serve`
-                -> Listen: <url>/edited.mp3   Listen original: <url>/original.mp3
+                -> [Listen](<url>/edited.mp3) · [Listen original](<url>/original.mp3)
 ```
 
 The original track has no LLM call: code, URLs and paths are dropped or spoken as short names, and each sentence goes to TTS at once. The edited track streams the script from the model; every sentence is leak-checked and has its digits spelled out locally (no retry call), then goes to TTS while the rest is still being written. A final check runs on the whole script; if it fails the edited track is marked failed and nothing from it is served.

@@ -12,5 +12,8 @@ export function briefLinks(base: string, id: string): Links {
   return { id, listen: `${card}/edited.mp3`, listen_original: `${card}/original.mp3`, card };
 }
 
-/** The two chat lines, in this order. The card link is not part of them. */
-export const listenLines = (l: Links): string => `Listen: ${l.listen}\nListen original: ${l.listen_original}`;
+/** The chat line: two tappable words on one line. The card link is not part of it. */
+export const listenMarkdown = (l: Pick<Links, "listen" | "listen_original">): string => `[Listen](${l.listen}) \u00b7 [Listen original](${l.listen_original})`;
+
+/** The old two-line form, for `--format plain`. */
+export const listenLines = (l: Pick<Links, "listen" | "listen_original">): string => `Listen: ${l.listen}\nListen original: ${l.listen_original}`;

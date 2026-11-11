@@ -1,6 +1,6 @@
 ---
 name: earshot
-description: Turn a finished task's result into a short spoken memo with a sketch, and print two Listen links (edited and original) as the last two lines of the reply. Use at the end of a substantial task (several tool calls: edits, test runs, a deploy, a research pass, a PR) or when the user says "narrate", "listen" or "voice memo". Do not use for greetings, quick answers, single lookups, clarifying questions, or any turn with no tool use or under about 400 characters of result.
+description: Turn a finished task's result into a short spoken memo with a sketch, and end the reply with one line of two tappable Listen links (edited and original). Use at the end of a substantial task (several tool calls: edits, test runs, a deploy, a research pass, a PR) or when the user says "narrate", "listen" or "voice memo". Do not use for greetings, quick answers, single lookups, clarifying questions, or any turn with no tool use or under about 400 characters of result.
 allowed-tools: Bash({{EARSHOT}} run *)
 ---
 <!-- earshot-managed -->
@@ -24,7 +24,7 @@ Run this once, at the very end of a turn that did real work, or when the user sa
 EARSHOT_EOF
 ```
 
-3. The command prints two lines at once: `Listen: <url>` and `Listen original: <url>`. Each link starts playing when opened. Copy both lines verbatim.
-4. Send your final reply, unchanged. Make the last two lines of the message exactly those two lines, in that order, with nothing after them. Do not add the card link or any other link.
+3. The command prints one markdown line at once, like `[Listen](<url>) · [Listen original](<url>)`. Each link starts playing when tapped. Copy the line verbatim.
+4. Send your final reply, unchanged. Make the last line of the message exactly that markdown line, with nothing after it. Do not add the card link or any other link, and do not turn the links into raw URLs.
 
-If the command fails or prints no `Listen:` line, say so in one sentence and do not invent a link.
+If the command fails or prints no `[Listen](` line, say so in one sentence and do not invent a link.
