@@ -1,7 +1,7 @@
 import { briefDir, createBrief, initialMeta, readInputText, readMeta, type Meta, type Stage } from "./bundle.js";
 import type { Config } from "./config.js";
 import { newId } from "./lib/id.js";
-import { PROMPT_VERSION } from "./prompt-version.js";
+import { PROMPTS } from "./prompt-version.js";
 import { redact } from "./redact.js";
 import { truncateMiddle } from "./extract/stdin.js";
 import { validEvidence } from "./earscript.js";
@@ -35,7 +35,7 @@ export function prepareBrief(cfg: Config, raw: string, opts: { from: string; ses
   const ms = Math.round(performance.now() - t1);
   stages.push({ name: "scrub", ms, ok: true });
   log(`scrub ${ms}ms`);
-  const meta = initialMeta(id, { from: opts.from, chars: raw.length, redacted: s.redacted, truncated: s.truncated, ...(opts.session ? { session: opts.session } : {}) }, PROMPT_VERSION);
+  const meta = initialMeta(id, { from: opts.from, chars: raw.length, redacted: s.redacted, truncated: s.truncated, ...(opts.session ? { session: opts.session } : {}) }, PROMPTS[cfg.script.style].version);
   meta.stages = stages;
   // A caller-supplied evidence link passes the same rules as an LLM-chosen one (it must appear in the scrubbed text).
   if (opts.evidence) meta.evidence = validEvidence(opts.evidence, s.text, cfg.privacy.evidence_hosts);

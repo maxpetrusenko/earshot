@@ -1,6 +1,6 @@
 # earshot
 
-Turn a coding agent's finished work into a voice memo and a one-glance diagram, and get back a `Listen:` link you can open on your phone.
+Turn a coding agent's finished work into a voice memo and a one-glance diagram, and get back two links that start playing the moment you tap them: `Listen:` for the edited memo and `Listen original:` for your agent's own words.
 
 <p align="center"><img src="assets/brand/hero-card.png" alt="The earshot card on a phone: title, player, a top-down four-box diagram and the transcript" width="360"></p>
 
@@ -27,7 +27,7 @@ A minimal `~/.config/earshot/config.yaml`:
 ```yaml
 llm:
   type: claude-cli          # runs `claude -p` on your Claude login
-  model: haiku
+  model: sonnet
   # or any OpenAI-compatible chat endpoint:
   # type: openai-compatible
   # base_url: http://localhost:11434/v1
@@ -49,19 +49,20 @@ Start the server in one terminal and make a memo from another:
 earshot serve
 
 echo "Fixed the flaky webhook retries. The counter reset on every 5xx, so a dead endpoint was retried forever. Now it stops after five attempts. 212 tests pass. Open question: delete the 41k stale rows or archive them?" | earshot run
-# Listen: http://localhost:7777/b/<id>
+# Listen: http://localhost:7777/b/<id>/edited.mp3
+# Listen original: http://localhost:7777/b/<id>/original.mp3
 ```
 
-Open the link. On a CPU-only machine a memo takes about 11 seconds to reach `ready`.
+Open either link. Audio starts while the memo is still being made: the original in about 1.5 seconds, the edited memo in about 4. Both links are one MP3 that keeps growing until the track is complete, then it becomes a normal seekable file. The card with the diagram and transcript is at `/b/<id>`; `--format json` prints `{listen, listen_original, card, id}`.
 
 ## Integrations
 
 | Agent | Command | How the link reaches you |
 |---|---|---|
-| Claude Code, skill | `earshot install claude-code` | Claude ends its reply with `Listen: <url>` |
+| Claude Code, skill | `earshot install claude-code` | Claude ends its reply with the two `Listen` lines |
 | Claude Code, hook | `earshot install claude-code --mode hook` | Stop hook message in the terminal UI |
 | Codex | `earshot install codex` | `notify` program, link in `~/.earshot/logs/hook.log` |
-| Any MCP client | `earshot install mcp --client claude-code` | the agent calls the `narrate` tool and prints the URL |
+| Any MCP client | `earshot install mcp --client claude-code` | the agent calls the `narrate` tool and prints the two links |
 | Anything else | `earshot run --from tagged` | reads the last `<narrate>...</narrate>` block from stdin |
 
 Pick skill or hook mode per scope, not both. Details: [Claude Code](docs/claude-code.md), [Codex](docs/codex.md), [MCP](docs/mcp.md). The installers back up the files they edit and never touch entries they did not write. `earshot uninstall <agent>` undoes them.
@@ -75,31 +76,43 @@ Pick skill or hook mode per scope, not both. Details: [Claude Code](docs/claude-
       |
  2. scrub     redact secret-shaped strings, cap input length
       |
- 3. rewrite   one LLM call -> { title, spoken script, mermaid diagram }
-      |
-      +---------------+
-      |               |
- 4. voice (TTS)   sketch (mermaid -> SVG)      run in parallel
-      |               |
-      +-------+-------+
-              |
- 5. card      ~/.earshot/briefs/<id>/ served by `earshot serve`
-              -> Listen: <url>
+      +--------------------------+--------------------+
+      |                          |                    |
+ original track             edited track          sketch (mermaid -> SVG)
+ clean text -> TTS          LLM stream -> sentences    starts when the diagram
+ sentence by sentence       -> TTS per chunk           is written, never blocks audio
+      |                          |
+ original.mp3 (growing)     edited.mp3 (growing)
+      |                          |
+      +------------+-------------+
+                   |
+ card + links   ~/.earshot/briefs/<id>/ served by `earshot serve`
+                -> Listen: <url>/edited.mp3   Listen original: <url>/original.mp3
 ```
 
-The link is allocated before the work finishes. With `--detach`, and in every hook, the command prints the link at once and a background worker completes the memo, so the agent is never blocked.
+The original track has no LLM call: code, URLs and paths are dropped or spoken as short names, and each sentence goes to TTS at once. The edited track streams the script from the model; every sentence is leak-checked and has its digits spelled out locally (no retry call), then goes to TTS while the rest is still being written. A final check runs on the whole script; if it fails the edited track is marked failed and nothing from it is served.
+
+The links are allocated before the work finishes. With `--detach`, and in every hook, the command prints the link at once and a background worker completes the memo, so the agent is never blocked.
 
 ## Privacy and security
 
 - Text is scrubbed before any network call. API keys, tokens, private keys and `KEY=value` pairs are redacted, and long input is cut from the middle at `privacy.max_input_chars`.
 - `claude-cli` removes `ANTHROPIC_API_KEY` from the child environment, so it uses your subscription login and never bills API credits.
 - `earshot serve` binds loopback or a Tailscale address only. `tailscale-serve` mode never uses funnel. There is no public mode.
-- A brief is reachable only by its 16-character id. The server serves four files per brief: the card, `memo.mp3`, the sketch and `meta.json`. `input.txt` and `script.md` are never served.
+- A brief is reachable only by its 16-character id. The server serves the card, `edited.mp3`, `original.mp3`, the sketch and `meta.json` per brief (and `memo.mp3` for briefs made before the two tracks existed). The chunk files, `input.txt` and `script.md` are never served.
 - The card HTML escapes every string. The SVG is sanitized and served with `script-src 'none'`. The card runs under a strict CSP with no inline scripts and no CDN calls.
 - The evidence link on the card must appear in your text, point at an allowed host (`github.com`, `gitlab.com`, plus `privacy.evidence_hosts`) and carry no secret-looking path or query.
 - MCP input is untrusted. It gets the same scrub, tags are stripped, and a server process accepts 6 `narrate` calls per 10 minutes.
 
 Scrubbing is pattern based. It misses a secret that does not look like one, so keep the server on a network you trust.
+
+## Script style and voices
+
+`script.style` picks the prompt. `story` (the default) tells the report to you the way a colleague would on a call: it opens with "Hey," or "Quick update,", names who is doing what, says the count first, reads quoted text such as a post draft word for word, and ends with what you need to do. `brief` is the short status-style memo.
+
+`tts.profile` picks an entry of `tts.profiles`. `fast` is Kokoro. Any OpenAI-compatible `/v1/audio/speech` server can be a profile, for example a voice clone; if a server answers with WAV, earshot converts it with ffmpeg. A clone that takes tens of seconds per sentence cannot stream, so keep the fast profile as the default unless it keeps up.
+
+`llm.model: sonnet` is the default for `claude-cli`. In testing it streamed its first words in about 1.5 seconds; haiku spent 6 to 10 seconds thinking before the first word.
 
 ## Config reference
 

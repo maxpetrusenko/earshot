@@ -48,10 +48,10 @@ describe("narrate tool logic", () => {
     const r = await narrate({ text: "Deployed the worker. ".repeat(20), wait: true, title: "My title" }, fresh(), deps);
     expect(r.status).toBe("ready");
     expect(r.script).toContain("word");
-    expect(r.audio_url).toBe(`${r.url}/memo.mp3`);
+    expect(r.audio_url).toBe(`${r.url}/edited.mp3`);
     expect(r.image_url).toBe(`${r.url}/sketch.svg`);
     expect(r.title).toBe("My title");
-    expect(existsSync(join(briefDir(r.id), "memo.mp3"))).toBe(true);
+    expect(existsSync(join(briefDir(r.id), "edited.mp3"))).toBe(true);
     const again = await briefStatus(r.id, deps);
     expect(again).toMatchObject({ id: r.id, status: "ready", audio_url: r.audio_url });
   }, 30_000);
@@ -141,7 +141,7 @@ describe("MCP over stdio (real SDK client, real server process)", () => {
         status = last.status as string;
       }
       expect(status).toBe("ready");
-      expect(last.audio_url).toBe(`${first.url}/memo.mp3`);
+      expect(last.audio_url).toBe(`${first.url}/edited.mp3`);
       const bad = await client.callTool({ name: "narrate", arguments: { text: "" } });
       expect(bad.isError).toBe(true);
     } finally {

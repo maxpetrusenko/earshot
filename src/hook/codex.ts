@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { cachedBaseUrl } from "../baseurl.js";
 import { earshotHome, loadConfig, type Config } from "../config.js";
 import { startDetached } from "../detach.js";
+import { briefLinks } from "../links.js";
 import { applyTag, readTail } from "../extract/claude-code.js";
 import { findCodexSession, isSafeCodexId, lastCodexTurn } from "../extract/codex.js";
 import { enqueue, lockedRecently } from "./state.js";
@@ -79,6 +80,9 @@ export function decideCodex(p: NotifyPayload, cfg: Config, findSession: (id: str
 
 export interface CodexHookOutput {
   url?: string;
+  listen?: string;
+  listen_original?: string;
+  card?: string;
   id?: string;
 }
 
@@ -104,7 +108,8 @@ export async function handleNotify(p: NotifyPayload, deps: CodexHookDeps = {}): 
     const base = await (deps.baseUrl ?? ((c) => cachedBaseUrl(c.serve)))(cfg);
     const url = `${base}/b/${id}`;
     log(`narrate codex session=${session || "?"} id=${id} pid=${job.pid} chars=${d.text.length} tools=${d.toolUses} hook_ms=${Math.round(performance.now())} ${url}`);
-    return { url, id };
+    const l = briefLinks(base, id);
+    return { url, id, listen: l.listen, listen_original: l.listen_original, card: l.card };
   } catch (e) {
     log(`error: ${e instanceof Error ? e.message : String(e)}`);
     return {};

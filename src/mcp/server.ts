@@ -4,9 +4,9 @@ import { z } from "zod";
 import { briefStatus, narrate, RateLimiter, ToolError, type BriefView, type ToolDeps } from "./tools.js";
 
 const NARRATE_DESCRIPTION =
-  "Turn a finished task's result into a short spoken memo with a sketch. Returns a Listen link the user can open on a phone. " +
-  "Pass the result text itself, not a summary you wrote. Print the returned url on its own line as 'Listen: <url>'. " +
-  "Returns at once by default; the audio is ready a few seconds to a minute later (check with brief_status).";
+  "Turn a finished task's result into two spoken memos (edited and original) with a sketch. Returns two links that start playing when opened, even while the audio is still being made. " +
+  "Pass the final reply text exactly as written, not a summary. Print two lines and nothing else: 'Listen: <listen>' and 'Listen original: <listen_original>'. Do not print the card link unless asked. " +
+  "Returns at once by default (check with brief_status).";
 
 const asResult = (v: BriefView) => ({
   content: [{ type: "text" as const, text: JSON.stringify(v) }],
@@ -20,10 +20,14 @@ const asError = (e: unknown) => ({
 
 const viewShape = {
   url: z.string(),
+  card: z.string(),
+  listen: z.string(),
+  listen_original: z.string(),
   id: z.string(),
   status: z.enum(["pending", "ready", "degraded", "failed"]),
   script: z.string().optional(),
   audio_url: z.string().optional(),
+  original_audio_url: z.string().optional(),
   image_url: z.string().optional(),
   title: z.string().optional(),
   error: z.string().optional(),
@@ -58,7 +62,7 @@ export function createServer(deps: ToolDeps = {}): McpServer {
     {
       title: "Status of a memo",
       description: "Status of a memo started by narrate: pending, ready, degraded or failed, with the script and file links once done.",
-      inputSchema: { id: z.string().describe("The id returned by narrate (the last part of the Listen link).") },
+      inputSchema: { id: z.string().describe("The id returned by narrate (the id returned with the links).") },
       outputSchema: viewShape,
     },
     async (a) => {

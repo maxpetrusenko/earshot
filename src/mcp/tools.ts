@@ -6,6 +6,7 @@ import { loadConfig, type Config } from "../config.js";
 import { startDetached } from "../detach.js";
 import { applyTag } from "../extract/claude-code.js";
 import { isValidId } from "../lib/id.js";
+import { briefLinks } from "../links.js";
 import { redact } from "../redact.js";
 import { sweepDead } from "../sweep.js";
 
@@ -25,11 +26,16 @@ export interface NarrateArgs {
 }
 
 export interface BriefView {
+  /** The card page. Prefer the two listen links in chat. */
   url: string;
+  card: string;
+  listen: string;
+  listen_original: string;
   id: string;
   status: Status;
   script?: string;
   audio_url?: string;
+  original_audio_url?: string;
   image_url?: string;
   title?: string;
   error?: string;
@@ -74,17 +80,24 @@ function readScript(id: string): string | undefined {
   }
 }
 
+const pendingView = (id: string, base: string): BriefView => {
+  const l = briefLinks(base, id);
+  return { url: l.card, card: l.card, listen: l.listen, listen_original: l.listen_original, id, status: "pending" };
+};
+
 /** The tool result for one brief, from what is on disk. No local paths. */
 export function viewBrief(id: string, base: string): BriefView | null {
   const meta = readMeta(id);
   if (!meta) return null;
-  const url = `${base}/b/${id}`;
-  const v: BriefView = { url, id, status: meta.status, title: meta.title };
+  const l = briefLinks(base, id);
+  const url = l.card;
+  const v: BriefView = { url, card: l.card, listen: l.listen, listen_original: l.listen_original, id, status: meta.status, title: meta.title };
   if (meta.status === "failed" && meta.error) v.error = meta.error;
   if (meta.status === "ready" || meta.status === "degraded") {
     const script = readScript(id);
     if (script) v.script = script;
-    if (existsSync(join(briefDir(id), "memo.mp3"))) v.audio_url = `${url}/memo.mp3`;
+    if (existsSync(join(briefDir(id), "edited.mp3")) || existsSync(join(briefDir(id), "memo.mp3"))) v.audio_url = l.listen;
+    if (existsSync(join(briefDir(id), "original.mp3"))) v.original_audio_url = l.listen_original;
     if (existsSync(join(briefDir(id), "sketch.svg"))) v.image_url = `${url}/sketch.svg`;
     if (meta.status === "degraded" && meta.error) v.error = meta.error;
   }
@@ -109,7 +122,7 @@ export async function narrate(args: NarrateArgs, limiter: RateLimiter, deps: Too
   const title = args.title ? (cfg.privacy.redact ? redact(args.title).text : args.title).replace(/[\r\n]+/g, " ").trim().slice(0, TITLE_MAX) : undefined;
   const job = startDetached(cfg, body, { from: "mcp", title: title || undefined, evidence: args.evidence, configPath: process.env.EARSHOT_CONFIG });
   const id = job.prepared.meta.id;
-  if (!args.wait) return viewBrief(id, base) ?? { url: `${base}/b/${id}`, id, status: "pending" };
+  if (!args.wait) return viewBrief(id, base) ?? pendingView(id, base);
   return waitFor(id, base, deps);
 }
 
@@ -121,7 +134,7 @@ export async function waitFor(id: string, base: string, deps: ToolDeps = {}): Pr
   for (;;) {
     const v = viewBrief(id, base);
     if (v && isTerminal(v.status)) return v;
-    if (now() >= deadline) return v ?? { url: `${base}/b/${id}`, id, status: "pending" };
+    if (now() >= deadline) return v ?? pendingView(id, base);
     await sleep(POLL_MS);
   }
 }

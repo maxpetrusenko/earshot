@@ -25,7 +25,12 @@ export interface TtsConfig {
   speed: number;
   api_key_env: string;
   timeout_s: number;
+  /** The active profile name, or "" when none is set. Its values are already merged into this object. */
+  profile: string;
 }
+
+/** A named set of tts overrides. `fast` is Kokoro, `max` a voice clone; tts.profile picks one. */
+export type TtsProfile = Partial<Omit<TtsConfig, "type" | "format">>;
 
 export interface ServeConfig {
   mode: "tailscale-serve" | "tailnet-ip" | "loopback";
@@ -40,6 +45,8 @@ export interface Config {
   image: { type: "mermaid" | "none"; renderer: "beautiful-mermaid"; theme: "paper" };
   serve: ServeConfig;
   privacy: { redact: boolean; max_input_chars: number; evidence_hosts: string[] };
+  /** story: a conversational memo (prompt v1); brief: the terse v0 memo. */
+  script: { style: "story" | "brief" };
   /** Which Stop events become a memo (hook mode). */
   trigger: { min_chars: number; require_tool_use: boolean; opt_in_tag: boolean };
 }
@@ -47,7 +54,7 @@ export interface Config {
 export const DEFAULTS: Config = {
   llm: {
     type: "claude-cli",
-    model: "haiku",
+    model: "sonnet",
     timeout_s: 90,
     command: "claude",
     base_url: "",
@@ -62,11 +69,13 @@ export const DEFAULTS: Config = {
     speed: 1.0,
     api_key_env: "",
     timeout_s: 120,
+    profile: "",
   },
   image: { type: "mermaid", renderer: "beautiful-mermaid", theme: "paper" },
   serve: { mode: "tailscale-serve", port: 7777, https_port: 443 },
   privacy: { redact: true, max_input_chars: 40000, evidence_hosts: [] },
   trigger: { min_chars: 400, require_tool_use: true, opt_in_tag: false },
+  script: { style: "story" },
 };
 
 export function defaultConfigPath(): string {
@@ -109,6 +118,27 @@ const isHostList = (v: unknown) =>
 const oneOf = (...xs: string[]) => (v: unknown) => typeof v === "string" && xs.includes(v);
 const port = (v: unknown) => Number.isInteger(v) && (v as number) > 0 && (v as number) < 65536;
 
+const PROFILE_KEYS = ["base_url", "model", "voice", "speed", "api_key_env", "timeout_s"];
+
+/** Merge tts.profiles[tts.profile] over the base tts values. An unknown profile name is an error. */
+function applyTtsProfile(cfg: Config, profiles: unknown): void {
+  if (profiles !== undefined && !isObj(profiles)) throw new ConfigError('config: "tts.profiles" must be a mapping');
+  const name = cfg.tts.profile;
+  if (!name) return;
+  const p = (profiles as Obj | undefined)?.[name];
+  if (p === undefined) throw new ConfigError(`config: tts.profile "${name}" is not in tts.profiles`);
+  if (!isObj(p)) throw new ConfigError(`config: "tts.profiles.${name}" must be a mapping`);
+  for (const k of Object.keys(p)) if (!PROFILE_KEYS.includes(k)) throw new ConfigError(`config: unknown key "tts.profiles.${name}.${k}"`);
+  const path = `tts.profiles.${name}`;
+  const t = cfg.tts;
+  t.base_url = pick(p, path, "base_url", t.base_url, isStr, "a string");
+  t.model = pick(p, path, "model", t.model, isStr, "a string");
+  t.voice = pick(p, path, "voice", t.voice, isStr, "a string");
+  t.speed = pick(p, path, "speed", t.speed, isNum, "a positive number");
+  t.api_key_env = pick(p, path, "api_key_env", t.api_key_env, isStr, "a string");
+  t.timeout_s = pick(p, path, "timeout_s", t.timeout_s, isNum, "a positive number");
+}
+
 export function parseConfig(text: string): Config {
   let raw: unknown;
   try {
@@ -118,17 +148,18 @@ export function parseConfig(text: string): Config {
   }
   if (!isObj(raw)) throw new ConfigError("config: top level must be a mapping");
   for (const k of Object.keys(raw)) {
-    if (!["llm", "tts", "image", "serve", "privacy", "trigger"].includes(k)) {
+    if (!["llm", "tts", "image", "serve", "privacy", "trigger", "script"].includes(k)) {
       throw new ConfigError(`config: unknown key "${k}"`);
     }
   }
   const d = DEFAULTS;
   const llm = section(raw, "llm", ["type", "model", "timeout_s", "command", "base_url", "api_key_env"]);
-  const tts = section(raw, "tts", ["type", "base_url", "model", "voice", "format", "speed", "api_key_env", "timeout_s"]);
+  const tts = section(raw, "tts", ["type", "base_url", "model", "voice", "format", "speed", "api_key_env", "timeout_s", "profile", "profiles"]);
   const image = section(raw, "image", ["type", "renderer", "theme"]);
   const serve = section(raw, "serve", ["mode", "port", "https_port"]);
   const privacy = section(raw, "privacy", ["redact", "max_input_chars", "evidence_hosts"]);
   const trigger = section(raw, "trigger", ["min_chars", "require_tool_use", "opt_in_tag"]);
+  const script = section(raw, "script", ["style"]);
 
   const cfg: Config = {
     llm: {
@@ -148,6 +179,7 @@ export function parseConfig(text: string): Config {
       speed: pick(tts, "tts", "speed", d.tts.speed, isNum, "a positive number"),
       api_key_env: pick(tts, "tts", "api_key_env", d.tts.api_key_env, isStr, "a string"),
       timeout_s: pick(tts, "tts", "timeout_s", d.tts.timeout_s, isNum, "a positive number"),
+      profile: pick(tts, "tts", "profile", d.tts.profile, isStr, "a string"),
     },
     image: {
       type: pick(image, "image", "type", d.image.type, oneOf("mermaid", "none"), "mermaid or none"),
@@ -169,7 +201,9 @@ export function parseConfig(text: string): Config {
       require_tool_use: pick(trigger, "trigger", "require_tool_use", d.trigger.require_tool_use, isBool, "true or false"),
       opt_in_tag: pick(trigger, "trigger", "opt_in_tag", d.trigger.opt_in_tag, isBool, "true or false"),
     },
+    script: { style: pick(script, "script", "style", d.script.style, oneOf("story", "brief"), "story or brief") },
   };
+  applyTtsProfile(cfg, tts.profiles);
   if (cfg.llm.type === "openai-compatible" && !cfg.llm.base_url) {
     throw new ConfigError('config: "llm.base_url" is required for type openai-compatible');
   }

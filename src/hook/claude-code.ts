@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { cachedBaseUrl } from "../baseurl.js";
 import { loadConfig, type Config } from "../config.js";
 import { startDetached } from "../detach.js";
+import { briefLinks, listenLines } from "../links.js";
 import { applyTag, extractLastMessage, lastTurn, readTail } from "../extract/claude-code.js";
 import { earshotHome } from "../config.js";
 import { enqueue, lockedRecently } from "./state.js";
@@ -85,9 +86,10 @@ export async function handleStop(p: StopPayload, deps: HookDeps = {}): Promise<H
     const id = job.prepared.meta.id;
     if (session) enqueue(session, { id, pid: job.pid, ts: Date.now() });
     const base = await (deps.baseUrl ?? ((c) => cachedBaseUrl(c.serve)))(cfg);
-    const url = `${base}/b/${id}`;
+    const links = briefLinks(base, id);
+    const url = links.card;
     log(`narrate session=${session || "?"} id=${id} pid=${job.pid} chars=${d.text.length} tools=${d.toolUses} hook_ms=${Math.round(performance.now())} ${url}`);
-    return { systemMessage: `Listen: ${url}` };
+    return { systemMessage: listenLines(links) };
   } catch (e) {
     log(`error: ${e instanceof Error ? e.message : String(e)}`);
     return {};

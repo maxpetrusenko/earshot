@@ -40,10 +40,7 @@ h1 {
 
 .player {
   display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas: "play timeline" "play extras";
-  gap: 6px 18px;
-  align-items: center;
+  gap: 14px;
   padding: 18px;
   margin-bottom: 24px;
   background: #fffdf8;
@@ -51,41 +48,30 @@ h1 {
   border-radius: 20px;
 }
 
-.play {
-  grid-area: play;
-  width: 76px;
-  height: 76px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--green);
-  color: var(--green-ink);
-  display: grid;
-  place-items: center;
+.choices { display: grid; gap: 10px; }
+
+.choice {
+  min-height: 64px;
+  padding: 0 20px;
+  border: 1px solid var(--green);
+  border-radius: 16px;
+  background: #fffdf8;
+  color: var(--green);
+  font: 600 20px "Source Sans 3", Arial, sans-serif;
   cursor: pointer;
-  box-shadow: 0 6px 16px rgba(31, 111, 92, 0.28);
   -webkit-tap-highlight-color: transparent;
 }
-.play:active { transform: scale(0.97); }
-.play:disabled { background: #b9c9c3; box-shadow: none; cursor: default; }
-.play .icon {
-  width: 0; height: 0;
-  margin-left: 6px;
-  border-style: solid;
-  border-width: 14px 0 14px 23px;
-  border-color: transparent transparent transparent currentColor;
-}
-.play.playing .icon {
-  width: 22px; height: 26px; margin-left: 0;
-  border: 0;
-  background: linear-gradient(90deg, currentColor 0 36%, transparent 36% 64%, currentColor 64% 100%);
-}
+.choice.primary { background: var(--green); color: var(--green-ink); box-shadow: 0 6px 16px rgba(31, 111, 92, 0.28); }
+.choice:active { transform: scale(0.98); }
+.choice:disabled { border-color: #b9c9c3; background: #eef2f0; color: #8a9b95; box-shadow: none; cursor: default; }
+.choice.primary:disabled { background: #b9c9c3; color: var(--green-ink); }
 
-.timeline { grid-area: timeline; display: grid; gap: 4px; }
+.timeline { display: grid; gap: 4px; }
 .time { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
 
 input[type="range"] { width: 100%; height: 28px; margin: 0; accent-color: var(--green); background: transparent; }
 
-.extras { grid-area: extras; display: flex; gap: 8px; }
+.extras { display: flex; gap: 8px; }
 .extras button {
   min-height: 40px;
   padding: 0 14px;

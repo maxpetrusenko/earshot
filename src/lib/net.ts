@@ -1,5 +1,6 @@
 import http from "node:http";
 import https from "node:https";
+import { Readable } from "node:stream";
 import tls from "node:tls";
 
 /**
@@ -34,14 +35,12 @@ function directFetch(url: URL, init: RequestInit): Promise<Response> {
     const headers: Record<string, string> = {};
     new Headers(init.headers).forEach((v, k) => (headers[k] = v));
     const req = lib.request(url, { method: init.method ?? "GET", headers, agent, signal: init.signal ?? undefined }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (c: Buffer) => chunks.push(c));
-      res.on("error", reject);
-      res.on("end", () => {
-        const h = new Headers();
-        for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) h.set(k, Array.isArray(v) ? v.join(", ") : v);
-        resolve(new Response(Buffer.concat(chunks), { status: res.statusCode ?? 502, headers: h }));
-      });
+      const h = new Headers();
+      for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) h.set(k, Array.isArray(v) ? v.join(", ") : v);
+      const status = res.statusCode ?? 502;
+      // The body streams: a caller that reads it incrementally (SSE) sees data as it arrives.
+      const body = [204, 205, 304].includes(status) ? null : (Readable.toWeb(res) as ReadableStream<Uint8Array>);
+      resolve(new Response(body, { status, headers: h }));
     });
     req.on("error", reject);
     if (init.body !== undefined && init.body !== null) req.write(init.body as string);

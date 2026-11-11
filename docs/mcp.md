@@ -21,7 +21,7 @@ earshot uninstall mcp --client codex
 ## Tools
 
 `narrate` input: `{text: string, title?: string, evidence?: string, wait?: boolean}`.
-Output (also as `structuredContent`): `{url, id, status, script?, audio_url?, image_url?, title?, error?}`.
+Output (also as `structuredContent`): `{url, card, listen, listen_original, id, status, script?, audio_url?, original_audio_url?, image_url?, title?, error?}`. `listen` and `listen_original` start playing when opened, even while the memo is still being made; print those two lines. `url` and `card` are the card page..
 
 - Default `wait=false`: the brief is written, a detached worker starts, and the link comes back in about 100 ms with `status: "pending"`. The worker is the same one the Stop hook starts.
 - `wait=true` polls until `ready`, `degraded` or `failed`, for at most 120 s. On timeout it returns the `pending` view, not an error.
