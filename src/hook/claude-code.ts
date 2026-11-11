@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { cachedBaseUrl } from "../baseurl.js";
 import { loadConfig, type Config } from "../config.js";
 import { startDetached } from "../detach.js";
-import { briefLinks, listenLines } from "../links.js";
+import { briefLinks, listenMarkdown } from "../links.js";
 import { applyTag, extractLastMessage, lastTurn, readTail } from "../extract/claude-code.js";
 import { earshotHome } from "../config.js";
 import { enqueue, lockedRecently } from "./state.js";
@@ -89,7 +89,7 @@ export async function handleStop(p: StopPayload, deps: HookDeps = {}): Promise<H
     const links = briefLinks(base, id);
     const url = links.card;
     log(`narrate session=${session || "?"} id=${id} pid=${job.pid} chars=${d.text.length} tools=${d.toolUses} hook_ms=${Math.round(performance.now())} ${url}`);
-    return { systemMessage: listenLines(links) };
+    return { systemMessage: listenMarkdown(links) };
   } catch (e) {
     log(`error: ${e instanceof Error ? e.message : String(e)}`);
     return {};

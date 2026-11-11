@@ -5,7 +5,7 @@ import { Command } from "commander";
 import { cachedBaseUrl } from "./baseurl.js";
 import { ConfigError, defaultConfigPath, loadConfig } from "./config.js";
 import { startDetached } from "./detach.js";
-import { briefLinks, listenLines } from "./links.js";
+import { briefLinks, listenLines, listenMarkdown } from "./links.js";
 import { prepareBrief } from "./prepare.js";
 import { extractLastMessage, findTranscript, isSafeSessionId } from "./extract/claude-code.js";
 import { extractCodexLast, findCodexSession, isSafeCodexId } from "./extract/codex.js";
@@ -94,11 +94,11 @@ async function runCommand(flags: RunFlags): Promise<number> {
     return 2;
   }
   if (flags.session) touchLock(flags.session);
-  if (flags.format !== undefined && flags.format !== "text" && flags.format !== "json") throw new UsageError(`--format must be text or json, got "${flags.format}"`);
+  if (flags.format !== undefined && flags.format !== "text" && flags.format !== "plain" && flags.format !== "json") throw new UsageError(`--format must be text, plain or json, got "${flags.format}"`);
   const asJson = flags.json || flags.format === "json";
   const out = (base: string, id: string) => {
     const l = briefLinks(base, id);
-    process.stdout.write(asJson ? `${JSON.stringify({ listen: l.listen, listen_original: l.listen_original, card: l.card, id: l.id })}\n` : `${listenLines(l)}\n`);
+    process.stdout.write(asJson ? `${JSON.stringify({ listen: l.listen, listen_original: l.listen_original, card: l.card, id: l.id })}\n` : `${flags.format === "plain" ? listenLines(l) : listenMarkdown(l)}\n`);
   };
   if (flags.detach) {
     const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, log });
@@ -169,7 +169,7 @@ program
   .option("--no-sketch", "skip the sketch")
   .option("--no-audio", "skip the audio")
   .option("--json", "same as --format json")
-  .option("--format <format>", "text (the two Listen lines) or json ({listen, listen_original, card, id})")
+  .option("--format <format>", "text (one markdown line: [Listen](...) · [Listen original](...)), plain (two Listen: lines) or json ({listen, listen_original, card, id})")
   .option("--dry-run", "scrub and ear-script only; print the script")
   .option("--config <path>", "alternate config file")
   .action(async (flags: RunFlags) => {

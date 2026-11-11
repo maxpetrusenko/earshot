@@ -49,7 +49,7 @@ Source: https://code.claude.com/docs/en/hooks (Stop section), checked 2026-11-10
 | `last_assistant_message` | the final response text; preferred over the transcript. The docs say the transcript "isn't guaranteed to include the final message at Stop time", and recommend this field for read-aloud hooks |
 | `background_tasks`, `session_crons` | ignored |
 
-Output: `{"systemMessage": "Listen: <url>/edited.mp3\nListen original: <url>/original.mp3"}`. The docs list `systemMessage` as a universal field, shown to the user, and the Stop section does not say it is discarded. `systemMessage` also arrives as an informational message in `--output-format stream-json` and the Agent SDK. In plain `claude -p` text mode a Stop hook's message is not printed; skill mode is the way to get a link into `-p` output. Every outcome logs to `~/.earshot/logs/hook.log`. earshot never returns `decision: block`, so it cannot extend a turn.
+Output: `{"systemMessage": "[Listen](<url>/edited.mp3) · [Listen original](<url>/original.mp3)"}`. The docs list `systemMessage` as a universal field, shown to the user, and the Stop section does not say it is discarded. `systemMessage` also arrives as an informational message in `--output-format stream-json` and the Agent SDK. In plain `claude -p` text mode a Stop hook's message is not printed; skill mode is the way to get a link into `-p` output. Every outcome logs to `~/.earshot/logs/hook.log`. earshot never returns `decision: block`, so it cannot extend a turn.
 
 ## Transcript fallback
 

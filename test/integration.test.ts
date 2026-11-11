@@ -172,13 +172,13 @@ describe("cli contract", () => {
       child.stdin.end(input);
     });
 
-  it("prints exactly one Listen line on success and exits 0", async () => {
+  it("prints one markdown Listen line on success and exits 0", async () => {
     const cfgPath = join(home, "cfg.yaml");
     writeFileSync(cfgPath, cfgYaml);
     const r = await run(["run", "--config", cfgPath], REPORT);
     expect(r.status).toBe(0);
-    expect(r.stdout.trim().split("\n")).toHaveLength(2);
-    expect(r.stdout).toMatch(/^Listen: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\nListen original: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\n$/);
+    expect(r.stdout.trim().split("\n")).toHaveLength(1);
+    expect(r.stdout).toMatch(/^\[Listen\]\(http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Listen original\]\(http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\)\n$/);
     expect(r.stderr).toContain("ear-script");
   });
   it("exits 2 on empty input", async () => {
@@ -193,8 +193,16 @@ describe("cli contract", () => {
     writeFileSync(cfgPath, cfgYaml.replace(`base_url: ${provider.url}\nserve`, "base_url: http://127.0.0.1:9/v1\nserve"));
     const r = await run(["run", "--config", cfgPath], REPORT);
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/^Listen: /);
+    expect(r.stdout).toMatch(/^\[Listen\]\(/);
     expect(r.stderr).toContain("degraded");
+  });
+  it("keeps the old two-line form under --format plain and json under --format json", async () => {
+    const cfgPath = join(home, "cfg.yaml");
+    writeFileSync(cfgPath, cfgYaml);
+    const plain = await run(["run", "--format", "plain", "--config", cfgPath], REPORT);
+    expect(plain.stdout).toMatch(/^Listen: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\nListen original: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\n$/);
+    const json = await run(["run", "--format", "json", "--config", cfgPath], REPORT);
+    expect(Object.keys(JSON.parse(json.stdout)).sort()).toEqual(["card", "id", "listen", "listen_original"]);
   });
   it("keeps the original track when the script is too short", async () => {
     const bad = await startFakeProvider({ script: "far too short" });

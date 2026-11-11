@@ -1,15 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { listenMarkdown } from "../links.js";
 import { briefStatus, narrate, RateLimiter, ToolError, type BriefView, type ToolDeps } from "./tools.js";
 
 const NARRATE_DESCRIPTION =
   "Turn a finished task's result into two spoken memos (edited and original) with a sketch. Returns two links that start playing when opened, even while the audio is still being made. " +
-  "Pass the final reply text exactly as written, not a summary. Print two lines and nothing else: 'Listen: <listen>' and 'Listen original: <listen_original>'. Do not print the card link unless asked. " +
+  "Pass the final reply text exactly as written, not a summary. The text content is one markdown line, [Listen](<listen>) · [Listen original](<listen_original>): print it as the last line of the reply, verbatim, with nothing after it. Do not print the card link unless asked. " +
   "Returns at once by default (check with brief_status).";
 
 const asResult = (v: BriefView) => ({
-  content: [{ type: "text" as const, text: JSON.stringify(v) }],
+  content: [{ type: "text" as const, text: listenMarkdown(v) }],
   structuredContent: v as unknown as Record<string, unknown>,
 });
 
