@@ -306,7 +306,8 @@ describe("tts profiles", () => {
     expect(() => parseConfig(yaml.replace("model: f5", "colour: red"))).toThrow(/unknown key/);
   });
   it("reads script.style", () => {
-    expect(parseConfig("").script.style).toBe("story");
+    expect(parseConfig("").script.style).toBe("short");
+    expect(parseConfig("script:\n  style: story\n").script.style).toBe("story");
     expect(parseConfig("script:\n  style: brief\n").script.style).toBe("brief");
     expect(() => parseConfig("script:\n  style: poem\n")).toThrow(ConfigError);
   });

@@ -178,7 +178,7 @@ describe("cli contract", () => {
     const r = await run(["run", "--config", cfgPath], REPORT);
     expect(r.status).toBe(0);
     expect(r.stdout.trim().split("\n")).toHaveLength(1);
-    expect(r.stdout).toMatch(/^\[Listen\]\(http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Listen original\]\(http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\)\n$/);
+    expect(r.stdout).toMatch(/^\[Listen\]\(http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Original\]\(http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\)\n$/);
     expect(r.stderr).toContain("ear-script");
   });
   it("exits 2 on empty input", async () => {
@@ -200,7 +200,7 @@ describe("cli contract", () => {
     const cfgPath = join(home, "cfg.yaml");
     writeFileSync(cfgPath, cfgYaml);
     const plain = await run(["run", "--format", "plain", "--config", cfgPath], REPORT);
-    expect(plain.stdout).toMatch(/^Listen: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\nListen original: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\n$/);
+    expect(plain.stdout).toMatch(/^Listen: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\nOriginal: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\n$/);
     const json = await run(["run", "--format", "json", "--config", cfgPath], REPORT);
     expect(Object.keys(JSON.parse(json.stdout)).sort()).toEqual(["card", "id", "listen", "listen_original"]);
   });

@@ -1,6 +1,6 @@
 # earshot
 
-Turn a coding agent's finished work into a voice memo and a one-glance diagram, and get back one chat line with two tappable words that start playing the moment you tap them: Listen for the edited memo and Listen original for your agent's own words.
+Turn a coding agent's finished work into a voice memo and a one-glance diagram, and get back one chat line with two tappable words that start playing the moment you tap them: Listen for the edited memo and Original for your agent's own words.
 
 <p align="center"><img src="assets/brand/hero-card.png" alt="The earshot card on a phone: title, player, a top-down four-box diagram and the transcript" width="360"></p>
 
@@ -55,16 +55,16 @@ Start the server in one terminal and make a memo from another:
 earshot serve
 
 echo "Fixed the flaky webhook retries. The counter reset on every 5xx, so a dead endpoint was retried forever. Now it stops after five attempts. 212 tests pass. Open question: delete the 41k stale rows or archive them?" | earshot run
-# [Listen](http://localhost:7777/b/<id>/edited.mp3) · [Listen original](http://localhost:7777/b/<id>/original.mp3)
+# [Listen](http://localhost:7777/b/<id>/edited.mp3) · [Original](http://localhost:7777/b/<id>/original.mp3)
 ```
 
-Tap either word (or open the URL). Audio starts while the memo is still being made: the original in about 1.5 seconds, the edited memo in about 4. Both links are one MP3 that keeps growing until the track is complete, then it becomes a normal seekable file. The card with the diagram and transcript is at `/b/<id>`; `--format plain` prints the old two lines (`Listen: <url>` and `Listen original: <url>`), and `--format json` prints `{listen, listen_original, card, id}`.
+Tap either word (or open the URL). Audio starts while the memo is still being made: the original in about 1.5 seconds, the edited memo in about 4. Both links are one MP3 that keeps growing until the track is complete, then it becomes a normal seekable file. The card with the diagram and transcript is at `/b/<id>`; `--format plain` prints the old two lines (`Listen: <url>` and `Original: <url>`), and `--format json` prints `{listen, listen_original, card, id}`.
 
 ## Integrations
 
 | Agent | Command | How the link reaches you |
 |---|---|---|
-| Claude Code, skill | `earshot install claude-code` | Claude ends its reply with one line: Listen · Listen original |
+| Claude Code, skill | `earshot install claude-code` | Claude ends its reply with one line: Listen · Original |
 | Claude Code, hook | `earshot install claude-code --mode hook` | Stop hook message in the terminal UI |
 | Orca chat (opt-in, desktop only) | `earshot run --format orca` | one `::orca-visual` line renders an inline player; not usable on iOS, see [Orca](docs/orca.md) |
 | Codex | `earshot install codex` | `notify` program, link in `~/.earshot/logs/hook.log` |
@@ -93,7 +93,7 @@ Pick skill or hook mode per scope, not both. Details: [Claude Code](docs/claude-
       +------------+-------------+
                    |
  card + links   ~/.earshot/briefs/<id>/ served by `earshot serve`
-                -> [Listen](<url>/edited.mp3) · [Listen original](<url>/original.mp3)
+                -> [Listen](<url>/edited.mp3) · [Original](<url>/original.mp3)
 ```
 
 The original track has no LLM call: code, URLs and paths are dropped or spoken as short names, and each sentence goes to TTS at once. The edited track streams the script from the model; every sentence is leak-checked and has its digits spelled out locally (no retry call), then goes to TTS while the rest is still being written. A final check runs on the whole script; if it fails the edited track is marked failed and nothing from it is served.
@@ -114,7 +114,7 @@ Scrubbing is pattern based. It misses a secret that does not look like one, so k
 
 ## Script style and voices
 
-`script.style` picks the prompt. `story` (the default) tells the report to you the way a colleague would on a call: it opens with "Hey," or "Quick update,", names who is doing what, says the count first, reads quoted text such as a post draft word for word, and ends with what you need to do. `brief` is the short status-style memo.
+`script.style` picks the prompt. `short` (the default) is a 20 to 40 second summary, hard capped at 110 words in code: what got done, what changed for you, then one decision as a question. It leaves out quoted text, file names, paths, number lists and URLs and points to the chat instead. `story` is the longer conversational memo that reads quoted text such as a post draft word for word. `brief` is the terse status memo. The Original track is the reply read as written, with code blocks, link targets, URLs, flags and paths skipped, and a table replaced by one line saying it is in the chat.
 
 `tts.profile` picks an entry of `tts.profiles`. `fast` is Kokoro. Any OpenAI-compatible `/v1/audio/speech` server can be a profile, for example a voice clone; if a server answers with WAV, earshot converts it with ffmpeg. A clone that takes tens of seconds per sentence cannot stream, so keep the fast profile as the default unless it keeps up.
 

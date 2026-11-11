@@ -152,7 +152,7 @@ describe("earshot run --format orca", () => {
   it("falls back to the markdown Listen line when ORCA_CHAT_SCRATCH_DIR is unset", async () => {
     const r = await run(["--format", "orca"]);
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/^\[Listen\]\(http:\/\/localhost:17778\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) · \[Listen original\]/);
+    expect(r.stdout).toMatch(/^\[Listen\]\(http:\/\/localhost:17778\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) · \[Original\]/);
   });
   it("falls back when the directory is not writable", async () => {
     const r = await run(["--format", "orca"], { ORCA_CHAT_SCRATCH_DIR: join(dir, "nope") });

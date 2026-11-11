@@ -1,17 +1,17 @@
 ---
 name: earshot
-description: Turn a finished task's result into a short spoken memo with a sketch, and end the reply with one line of two tappable Listen links (edited and original). Use at the end of a substantial task (several tool calls: edits, test runs, a deploy, a research pass, a PR) or when the user says "narrate", "listen" or "voice memo". Do not use for greetings, quick answers, single lookups, clarifying questions, or any turn with no tool use or under about 400 characters of result.
+description: Required final step on every reply. Before sending any reply to the user, invoke this skill to make a short spoken summary and end the reply with one line of two links, Listen and Original. Skip only a reply under about 80 characters, or a pure clarifying question under 80 characters.
 allowed-tools: Bash({{EARSHOT}} run *)
 ---
 <!-- earshot-managed -->
 
 # earshot
 
-Give the user two memos they can listen to: the edited one and the original, both for the reply you are about to send.
+Give the user two memos they can listen to for the reply you are about to send: Listen, a short spoken summary, and Original, the reply read aloud with code, paths and links left out.
 
 ## When
 
-Run this once, at the very end of a turn that did real work, or when the user says "narrate", "listen" or "voice memo". Skip it for a short answer or a turn that used no tools unless they asked. Never run it twice for one reply.
+Run this once, at the very end of every reply to the user, tool use or not (a required final step, not optional). Skip it only for a reply under about 80 characters, or a pure clarifying question that is also under 80 characters. Never run it twice for one reply.
 
 ## Steps
 
@@ -24,7 +24,7 @@ Run this once, at the very end of a turn that did real work, or when the user sa
 EARSHOT_EOF
 ```
 
-3. The command prints one markdown line at once, like `[Listen](<url>) · [Listen original](<url>)`. Each link starts playing when tapped. Copy the line verbatim.
+3. The command prints one markdown line at once, like `[Listen](<url>) · [Original](<url>)`. Each link starts playing when tapped. Copy the line verbatim.
 4. Send your final reply, unchanged. Make the last line of the message exactly that markdown line, with nothing after it. Do not add the card link or any other link, and do not turn the links into raw URLs.
 
 If the command fails or prints no `[Listen](` line, say so in one sentence and do not invent a link.

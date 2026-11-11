@@ -222,10 +222,13 @@ const PATH_RE = /(?:^|(?<=[\s(]))(?:~|\.{1,2})?\/?(?:[\w.@-]+\/)+[\w.@-]+(?:\.\w
 export function speakableOriginal(text: string, maxChars = 9000): string {
   let t = text.replace(/\r\n?/g, "\n");
   t = t.replace(/```[\s\S]*?(?:```|$)/g, "\n");
-  t = t.replace(/\[([^\]]+)\]\((?:https?:\/\/|\/|#)[^)]*\)/g, "$1");
-  t = t.replace(/https?:\/\/[^\s)>\]"']+/gi, "a link");
+  // the earshot Listen line itself (old and new labels), before link targets are stripped
+  t = t.split("\n").filter((l) => !/\/b\/[A-Za-z0-9]{16}\/(?:edited|original)\.mp3/.test(l)).join("\n");
+  t = t.replace(/\[([^\]]+)\]\([^)\s]*\)/g, "$1");
+  t = t.replace(/\bhttps?:\/\/[^\s)>\]"']+/gi, "");
   t = t.replace(/`([^`\n]+)`/g, (_m, code: string) => {
-    if (/\//.test(code) || /\.\w{1,6}$/.test(code)) return spokenPath(code);
+    if (/^-{1,2}[\w-]+/.test(code) || /\s--?[\w-]+/.test(code)) return "";
+    if (/\//.test(code) || /\.\w{1,6}$/.test(code)) return "";
     if (/^[\w.-]{1,40}$/.test(code)) return plainName(code);
     if (/^[\w-]+(?: --?[\w-]+| [\w-]+){0,2}$/.test(code) && code.length <= 30) return plainName(code);
     return "";
@@ -234,9 +237,17 @@ export function speakableOriginal(text: string, maxChars = 9000): string {
   t = t.replace(/\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b/gi, "");
   t = t.replace(/\b([A-Za-z]+(?:_[A-Za-z]+)+)\b/g, (m) => plainName(m));
   const lines: string[] = [];
+  let inTable = false;
   for (const raw of t.split("\n")) {
     let line = raw.trim();
-    if (!line || /^[-=*_|:\s]+$/.test(line) || /^\|.*\|$/.test(line)) {
+    const tableRow = /^\|.*\|$/.test(line) || /^[-|:\s]+$/.test(line) && line.includes("|");
+    if (tableRow) {
+      if (!inTable) lines.push("There's a table in the chat.");
+      inTable = true;
+      continue;
+    }
+    inTable = false;
+    if (!line || /^[-=*_:\s]+$/.test(line)) {
       if (!line) lines.push("");
       continue;
     }
@@ -246,7 +257,7 @@ export function speakableOriginal(text: string, maxChars = 9000): string {
     if (!line) continue;
     lines.push(/[.!?:]["')”]?$/.test(line) ? line : heading || !/[,;]$/.test(line) ? `${line}.` : line);
   }
-  let out = lines.join("\n").replace(/\n{3,}/g, "\n\n").replace(/([.!?]) ?\./g, "$1").trim();
+  let out = lines.join("\n").replace(/[ \t]+([.,;:!?])/g, "$1").replace(/\n{3,}/g, "\n\n").replace(/([.!?]) ?\./g, "$1").trim();
   if (out.length > maxChars) {
     const cut = out.slice(0, maxChars);
     const at = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf(".\n"));
