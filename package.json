@@ -1,6 +1,6 @@
 {
   "name": "earshot",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Hear what your coding agent did: ear-first voice memos and glance diagrams for Claude Code, Codex and MCP.",
   "type": "module",
   "bin": {
