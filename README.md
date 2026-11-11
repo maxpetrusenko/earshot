@@ -66,11 +66,12 @@ Tap either word (or open the URL). Audio starts while the memo is still being ma
 |---|---|---|
 | Claude Code, skill | `earshot install claude-code` | Claude ends its reply with one line: Listen · Listen original |
 | Claude Code, hook | `earshot install claude-code --mode hook` | Stop hook message in the terminal UI |
+| Claude Code in Orca | `earshot install claude-code --mode skill` | Orca renders an inline player (Play, Original) from one `::orca-visual` line, see [Orca](docs/orca.md) |
 | Codex | `earshot install codex` | `notify` program, link in `~/.earshot/logs/hook.log` |
 | Any MCP client | `earshot install mcp --client claude-code` | the agent calls the `narrate` tool and prints the one-line links |
 | Anything else | `earshot run --from tagged` | reads the last `<narrate>...</narrate>` block from stdin |
 
-Pick skill or hook mode per scope, not both. Details: [Claude Code](docs/claude-code.md), [Codex](docs/codex.md), [MCP](docs/mcp.md). The installers back up the files they edit and never touch entries they did not write. `earshot uninstall <agent>` undoes them.
+Pick skill or hook mode per scope, not both. Details: [Claude Code](docs/claude-code.md), [Orca](docs/orca.md), [Codex](docs/codex.md), [MCP](docs/mcp.md). The installers back up the files they edit and never touch entries they did not write. `earshot uninstall <agent>` undoes them.
 
 ## How it works
 

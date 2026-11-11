@@ -19,6 +19,8 @@ export interface RunOptions {
   voice?: string;
   noSketch?: boolean;
   noAudio?: boolean;
+  /** The caller waits for both finished tracks, so synthesize chunks in parallel and do not hold the original back. */
+  waitForAudio?: boolean;
   log?: (line: string) => void;
 }
 
@@ -29,6 +31,9 @@ export interface RunResult {
 
 /** At most two TTS requests in flight per process, shared by both tracks. */
 const ttsGate = new Semaphore(2);
+
+/** TTS requests in flight when the caller waits for the whole audio. */
+const TTS_PARALLEL = 6;
 
 const FALLBACK_TITLE = "Task finished";
 
@@ -128,14 +133,17 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
     const clean = (t: string) => (cfg.privacy.redact ? redact(t).text : t);
     const failures: string[] = [];
     const audioOn = !opts.noAudio;
-    const gate = ttsGate;
+    const wait = opts.waitForAudio === true;
+    const gate = wait ? new Semaphore(TTS_PARALLEL) : ttsGate;
     const voice = opts.voice;
     // The edited track is what the listener waits on, so the original pauses after its first chunk until the edited one has its own.
     let editedSettled!: () => void;
     const editedFirst = new Promise<void>((r) => (editedSettled = r));
     const base = { id, tts: cfg.tts, voice, t0, gate, log };
-    const originalW = audioOn ? new TrackWriter({ ...base, track: "original", holdAfterFirst: editedFirst }) : null;
-    const editedW = audioOn ? new TrackWriter({ ...base, track: "edited", onSettled: editedSettled }) : null;
+    // A second TTS server for the original means the two tracks never wait on each other.
+    const second = cfg.tts.original_base_url ? { tts: { ...cfg.tts, base_url: cfg.tts.original_base_url }, gate: new Semaphore(wait ? TTS_PARALLEL : 1) } : {};
+    const originalW = audioOn ? new TrackWriter({ ...base, ...second, track: "original", ...(wait ? { parallel: true } : cfg.tts.original_base_url ? {} : { holdAfterFirst: editedFirst }) }) : null;
+    const editedW = audioOn ? new TrackWriter({ ...base, track: "edited", onSettled: editedSettled, parallel: wait }) : null;
     if (!audioOn) editedSettled();
     if (!audioOn) {
       meta.tracks = null;

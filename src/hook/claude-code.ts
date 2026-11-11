@@ -6,6 +6,7 @@ import { startDetached } from "../detach.js";
 import { briefLinks, listenMarkdown } from "../links.js";
 import { applyTag, extractLastMessage, lastTurn, readTail } from "../extract/claude-code.js";
 import { earshotHome } from "../config.js";
+import { hasOrcaLine } from "../orca.js";
 import { enqueue, lockedRecently } from "./state.js";
 
 /** The Stop payload fields earshot reads. Verified against code.claude.com/docs/en/hooks (2026-11-10). */
@@ -65,6 +66,7 @@ export async function decide(p: StopPayload, cfg: Config, waitMs = 1000): Promis
     return { narrate: false, reason: "payload has no last_assistant_message and no transcript_path" };
   }
   if (hasEarshotLink(text)) return { narrate: false, reason: "reply already has an earshot link (skill ran)" };
+  if (hasOrcaLine(text)) return { narrate: false, reason: "reply already has an earshot Orca player line (skill ran)" };
   const tagged = applyTag(text, cfg.trigger.opt_in_tag);
   if (tagged === null) return { narrate: false, reason: "opt_in_tag is on and the message has no <narrate>" };
   if (tagged.length < cfg.trigger.min_chars) return { narrate: false, reason: `shorter than min_chars (${tagged.length} < ${cfg.trigger.min_chars})` };
