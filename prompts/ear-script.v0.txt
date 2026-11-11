@@ -19,7 +19,7 @@ LENGTH
 - If the report is trivial, go shorter. Never pad.
 
 STRUCTURE (spoken order, no headings, no lists)
-1. What got done, in one sentence. Lead with the outcome, not the activity.
+1. What got done, in one short sentence (under fifteen words). Lead with the outcome, not the activity.
 2. Why it matters, one sentence. The consequence for the user, not the code.
 3. How it works, in one or two moves. Picture a person explaining it at a whiteboard.
 4. What is next, or the single decision you need from them. If a decision is

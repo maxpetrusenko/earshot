@@ -1,9 +1,11 @@
 import { checkTitle, generateEarScript, type EarScript } from "./earscript.js";
-import { readMeta, SUPERSEDED, withBriefLock, writeBrief, writeFileInBundle, type Meta, type Stage } from "./bundle.js";
+import { streamEarScript, type StreamedEar } from "./ear-stream.js";
+import { readMeta, SUPERSEDED, updateMeta, withBriefLock, writeBrief, writeFileInBundle, type Meta, type Stage } from "./bundle.js";
+import { chunkText, speakableOriginal } from "./speech.js";
+import { Semaphore, TrackWriter } from "./track.js";
 import type { Config } from "./config.js";
-import { beginRun, endRun, traceSpan } from "./lib/llm-tracing.js";
+import { beginRun, endRun } from "./lib/llm-tracing.js";
 import { buildSketch } from "./sketch.js";
-import { synthesize } from "./tts.js";
 import type { LlmProvider } from "./llm.js";
 import { redact } from "./redact.js";
 import { prepareBrief, scrub, type Prepared } from "./prepare.js";
@@ -24,6 +26,9 @@ export interface RunResult {
   meta: Meta;
   dir: string;
 }
+
+/** At most two TTS requests in flight per process, shared by both tracks. */
+const ttsGate = new Semaphore(2);
 
 const FALLBACK_TITLE = "Task finished";
 
@@ -52,7 +57,7 @@ async function stage<T>(stages: Stage[], name: string, log: (l: string) => void,
 export async function dryRun(cfg: Config, llm: LlmProvider, raw: string, log: (l: string) => void): Promise<EarScript> {
   const { text } = scrub(cfg, raw);
   void log;
-  return generateEarScript(llm, text, cfg.privacy.evidence_hosts);
+  return generateEarScript(llm, text, cfg.privacy.evidence_hosts, cfg.script.style);
 }
 
 
@@ -76,6 +81,13 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
     return withBriefLock(id, () => {
       const onDisk = readMeta(id);
       if (onDisk?.status === "failed" && onDisk.error === SUPERSEDED) return { meta: onDisk, dir };
+      if (onDisk) meta.tracks = onDisk.tracks; // the track writers own this part of meta.json
+      for (const t of Object.values(meta.tracks ?? {})) {
+        if (t.status === "pending") {
+          t.status = "failed";
+          t.error = error ?? "stopped";
+        }
+      }
       meta.status = status;
       meta.error = error;
       meta.total_ms = Math.round(performance.now() - t0);
@@ -113,52 +125,100 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
   }
 
   async function pipelineBody(): Promise<RunResult> {
-    let ear: EarScript;
-    try {
-      ear = await stage(stages, "ear-script", log, () => generateEarScript(llm, text, cfg.privacy.evidence_hosts), { model: llm.model });
-    } catch (e) {
-      finish("failed", errMsg(e), null);
-      throw new NothingUsableError(errMsg(e));
-    }
-    // Generated text and --title are scrubbed too: the LLM can echo a secret, and the card renders them.
     const clean = (t: string) => (cfg.privacy.redact ? redact(t).text : t);
-    const script = clean(ear.script);
-    const mermaid = clean(ear.mermaid);
-    const title = clean(opts.title?.trim() || ear.title);
-    const titleLeak = checkTitle(title);
-    if (titleLeak) log(`warning: ${titleLeak}; using a generic title`);
-    meta.title = titleLeak ? FALLBACK_TITLE : title;
-    meta.evidence = ear.evidence ?? meta.evidence;
-    if (ear.warnings.length) meta.warnings = ear.warnings.map(clean);
-
     const failures: string[] = [];
-    const audioJob = opts.noAudio
-      ? Promise.resolve()
-      : stage(stages, "tts", log, () =>
-          traceSpan("tts", { input: { chars: script.length, voice: opts.voice ?? cfg.tts.voice } }, () => synthesize(cfg.tts, script, opts.voice), (r) => ({
-            duration_s: r.duration_s,
-            bytes: r.audio.length,
-          })),
-        ).then(
-          (r) => {
-            writeFileInBundle(id, "memo.mp3", r.audio);
-            meta.audio = { duration_s: r.duration_s, voice: opts.voice ?? cfg.tts.voice, provider: "openai-compatible" };
-          },
-          (e) => void failures.push(`tts: ${errMsg(e)}`),
-        );
-    const sketchJob =
-      opts.noSketch || cfg.image.type === "none" || !mermaid
-        ? Promise.resolve()
-        : stage(stages, "sketch", log, () => buildSketch(llm, mermaid)).then(
-            (r) => {
-              writeFileInBundle(id, "sketch.svg", r.svg);
-              meta.image = { renderer: cfg.image.renderer, mermaid: r.mermaid };
-            },
-            (e) => void failures.push(`sketch: ${errMsg(e)}`),
-          );
-    await Promise.all([audioJob, sketchJob]);
+    const audioOn = !opts.noAudio;
+    const gate = ttsGate;
+    const voice = opts.voice;
+    // The edited track is what the listener waits on, so the original pauses after its first chunk until the edited one has its own.
+    let editedSettled!: () => void;
+    const editedFirst = new Promise<void>((r) => (editedSettled = r));
+    const base = { id, tts: cfg.tts, voice, t0, gate, log };
+    const originalW = audioOn ? new TrackWriter({ ...base, track: "original", holdAfterFirst: editedFirst }) : null;
+    const editedW = audioOn ? new TrackWriter({ ...base, track: "edited", onSettled: editedSettled }) : null;
+    if (!audioOn) editedSettled();
+    if (!audioOn) {
+      meta.tracks = null;
+      updateMeta(id, (m) => void (m.tracks = null));
+    }
 
-    return finish(failures.length ? "degraded" : "ready", failures.length ? failures.join("; ") : null, script);
+    // Original track: no LLM. It starts speaking while the edited track is still waiting for its first token.
+    const originalDone = stage(stages, "tts-original", log, async () => {
+      if (!originalW) return;
+      const chunks = chunkText(speakableOriginal(text));
+      if (chunks.length === 0) originalW.fail("nothing in the report can be read aloud");
+      for (const c of chunks) originalW.add(c);
+      await originalW.close();
+      if (originalW.error) throw new Error(originalW.error);
+    }).catch((e) => void failures.push(`original: ${errMsg(e)}`));
+
+    // The sketch starts when the model finishes the diagram and never holds up audio.
+    let sketchJob: Promise<void> = Promise.resolve();
+    const startSketch = (mermaid: string) => {
+      if (opts.noSketch || cfg.image.type === "none") return;
+      sketchJob = stage(stages, "sketch", log, () => buildSketch(llm, clean(mermaid))).then(
+        (r) => {
+          writeFileInBundle(id, "sketch.svg", r.svg);
+          meta.image = { renderer: cfg.image.renderer, mermaid: r.mermaid };
+          updateMeta(id, (m) => void (m.image = meta.image));
+        },
+        (e) => void failures.push(`sketch: ${errMsg(e)}`),
+      );
+    };
+
+    let ear: StreamedEar | null = null;
+    try {
+      ear = await stage(
+        stages,
+        "ear-script",
+        log,
+        () =>
+          streamEarScript(
+            llm,
+            text,
+            {
+              onChunk: (c) => editedW?.add(c),
+              onTitle: (t) => {
+                if (opts.title?.trim() || checkTitle(t)) return;
+                updateMeta(id, (m) => void (m.title = clean(t)));
+              },
+              onMermaid: startSketch,
+            },
+            { evidenceHosts: cfg.privacy.evidence_hosts, style: cfg.script.style, redact: cfg.privacy.redact, log },
+          ),
+        { model: llm.model },
+      );
+      await stage(stages, "tts-edited", log, async () => {
+        await editedW?.close();
+        if (editedW?.error) throw new Error(editedW.error);
+      });
+    } catch (e) {
+      editedW?.fail(errMsg(e));
+      failures.push(`edited: ${errMsg(e)}`);
+    }
+    await Promise.all([originalDone, sketchJob]);
+
+    const disk = readMeta(id);
+    const originalReady = !audioOn ? false : disk?.tracks?.original.status === "ready";
+    // A script without audio is still a transcript and a sketch, so it counts as usable.
+    if (ear === null && !originalReady) {
+      const why = failures.find((f) => f.startsWith("edited:"))?.slice(8) ?? failures[0] ?? "nothing usable";
+      finish("failed", why, null);
+      throw new NothingUsableError(why);
+    }
+
+    if (ear) {
+      const title = clean(opts.title?.trim() || ear.title || "");
+      const titleLeak = title ? checkTitle(title) : null;
+      if (titleLeak) log(`warning: ${titleLeak}; using a generic title`);
+      meta.title = !title || titleLeak ? FALLBACK_TITLE : title;
+      meta.evidence = ear.evidence ?? meta.evidence;
+      meta.timing = { llm_first_token: ear.timing.first_token_ms ?? 0, first_sentence: ear.timing.first_sentence_ms ?? 0 };
+      if (ear.warnings.length) meta.warnings = ear.warnings.map(clean);
+    } else meta.title = clean(opts.title?.trim() || FALLBACK_TITLE);
+    const edited = disk?.tracks?.edited;
+    if (edited?.status === "ready") meta.audio = { duration_s: edited.duration_s, voice: voice ?? cfg.tts.voice, provider: "openai-compatible" };
+
+    return finish(failures.length ? "degraded" : "ready", failures.length ? failures.join("; ") : null, ear?.script ?? null);
   }
 }
-

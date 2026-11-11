@@ -5,6 +5,8 @@ import { Command } from "commander";
 import { cachedBaseUrl } from "./baseurl.js";
 import { ConfigError, defaultConfigPath, loadConfig } from "./config.js";
 import { startDetached } from "./detach.js";
+import { briefLinks, listenLines } from "./links.js";
+import { prepareBrief } from "./prepare.js";
 import { extractLastMessage, findTranscript, isSafeSessionId } from "./extract/claude-code.js";
 import { extractCodexLast, findCodexSession, isSafeCodexId } from "./extract/codex.js";
 import { extractStdin, normalizeInput } from "./extract/stdin.js";
@@ -18,7 +20,7 @@ import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
 import { flushTracing } from "./lib/llm-tracing.js";
-import { dryRun, executeBrief, loadPrepared, NothingUsableError, runPipeline } from "./run.js";
+import { dryRun, executeBrief, loadPrepared, NothingUsableError } from "./run.js";
 import { startServe } from "./serve-cmd.js";
 
 const err = (line: string) => process.stderr.write(`${line}\n`);
@@ -73,6 +75,7 @@ interface RunFlags {
   sketch: boolean;
   audio: boolean;
   json?: boolean;
+  format?: string;
   dryRun?: boolean;
   config?: string;
 }
@@ -91,11 +94,16 @@ async function runCommand(flags: RunFlags): Promise<number> {
     return 2;
   }
   if (flags.session) touchLock(flags.session);
+  if (flags.format !== undefined && flags.format !== "text" && flags.format !== "json") throw new UsageError(`--format must be text or json, got "${flags.format}"`);
+  const asJson = flags.json || flags.format === "json";
+  const out = (base: string, id: string) => {
+    const l = briefLinks(base, id);
+    process.stdout.write(asJson ? `${JSON.stringify({ listen: l.listen, listen_original: l.listen_original, card: l.card, id: l.id })}\n` : `${listenLines(l)}\n`);
+  };
   if (flags.detach) {
     const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, log });
-    const url = `${await cachedBaseUrl(cfg.serve)}/b/${job.prepared.meta.id}`;
     log(`worker pid ${job.pid}, log ${job.log}`);
-    process.stdout.write(flags.json ? `${JSON.stringify({ ...job.prepared.meta, url })}\n` : `Listen: ${url}\n`);
+    out(await cachedBaseUrl(cfg.serve), job.prepared.meta.id);
     return 0;
   }
   const llm = createLlm(cfg.llm);
@@ -105,17 +113,13 @@ async function runCommand(flags: RunFlags): Promise<number> {
     log(`${ear.words} words, ${ear.retries} retries`);
     return 0;
   }
+  // The links go out before any work: the server streams each track while it is still being made.
+  const prep = prepareBrief(cfg, input.text, { from: input.from, session: flags.session, log });
+  const base = await cachedBaseUrl(cfg.serve);
+  out(base, prep.meta.id);
   let result;
   try {
-    result = await runPipeline(cfg, llm, input.text, {
-      from: input.from,
-      session: flags.session,
-      title: flags.title,
-      voice: flags.voice,
-      noSketch: !flags.sketch,
-      noAudio: !flags.audio,
-      log,
-    });
+    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch, noAudio: !flags.audio, log });
   } catch (e) {
     if (e instanceof NothingUsableError) {
       err(`earshot: nothing usable was produced: ${e.message}`);
@@ -125,11 +129,10 @@ async function runCommand(flags: RunFlags): Promise<number> {
   }
   const { meta, dir } = result;
   const timings = meta.stages.map((s) => `${s.name}=${s.ms}ms`).join(" ");
+  const first = (["edited", "original"] as const).map((t) => `${t}=${meta.tracks?.[t]?.first_audio_ms ?? "n/a"}ms`).join(" ");
   log(`${meta.status} in ${meta.total_ms}ms (${timings}); bundle ${dir}`);
-  const base = await cachedBaseUrl(cfg.serve);
+  log(`time to first audio: ${first}`);
   await healthCheck(base);
-  const url = `${base}/b/${meta.id}`;
-  process.stdout.write(flags.json ? `${JSON.stringify({ ...meta, url })}\n` : `Listen: ${url}\n`);
   return 0;
 }
 
@@ -155,7 +158,7 @@ program
 
 program
   .command("run")
-  .description("make a memo from piped text and print its link")
+  .description("make a memo from piped text and print its two Listen links at once")
   .option("--file <path>", "read text from a file")
   .option("--from <name>", "stdin, claude-code, codex or tagged; claude-code and codex read that session's last message when nothing is piped; tagged takes the last <narrate> block")
   .option("--session <id>", "agent session id (claude-code or codex lookup, double-memo lock)")
@@ -165,7 +168,8 @@ program
   .option("--voice <name>", "override tts.voice")
   .option("--no-sketch", "skip the sketch")
   .option("--no-audio", "skip the audio")
-  .option("--json", "print the brief metadata as JSON")
+  .option("--json", "same as --format json")
+  .option("--format <format>", "text (the two Listen lines) or json ({listen, listen_original, card, id})")
   .option("--dry-run", "scrub and ear-script only; print the script")
   .option("--config <path>", "alternate config file")
   .action(async (flags: RunFlags) => {

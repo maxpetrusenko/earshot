@@ -64,13 +64,13 @@ describe("serve survives a file read error", () => {
     const cfg = cfgFor(p.url);
     const id = (await runPipeline(cfg, createLlm(cfg.llm), REPORT, { from: "stdin" })).meta.id;
     p.server.close();
-    const mp3 = join(briefDir(id), "memo.mp3");
+    const mp3 = join(briefDir(id), "edited.mp3");
     chmodSync(mp3, 0o000);
     const site = await createEarshotServer();
     await new Promise<void>((r) => site.listen(0, "127.0.0.1", r));
     const base = `http://127.0.0.1:${(site.address() as AddressInfo).port}`;
     try {
-      expect((await fetch(`${base}/b/${id}/memo.mp3`)).status).toBe(404);
+      expect((await fetch(`${base}/b/${id}/edited.mp3`)).status).toBe(404);
       expect((await fetch(`${base}/healthz`)).status).toBe(200);
     } finally {
       chmodSync(mp3, 0o600);

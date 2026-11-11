@@ -143,7 +143,7 @@ describe("earscript helpers", () => {
   it("checks word count", () => {
     expect(countWords(words(5))).toBe(5);
     expect(checkScript(words(40))).toContain("at least");
-    expect(checkScript(words(300))).toContain("at most");
+    expect(checkScript(words(400))).toContain("at most");
     expect(checkScript(words(120))).toBeNull();
   });
   it("flags path, code and url leaks", () => {

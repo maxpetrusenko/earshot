@@ -1,0 +1,21 @@
+Both workers are running, and HyperFrames is now in AGENTS.md as the default for post media.
+
+Worker 1, earshot slice 5:
+- One repo: the public GitHub repo becomes the only working copy. The old private one moves to .archive.
+- Two tracks: Play original starts in under 3 s; Play edited streams sentence by sentence, first audio under 6 s.
+- Faster number cleanup: digits are spelled out locally, so there's no slow LLM retry.
+- Early link: the Listen link appears immediately and the page fills in as the audio arrives.
+- Your install: the Claude Code skill, user scope only, so your settings.json is untouched. Then "narrate this" in any session returns a Listen link.
+- Delivery: a pull request on the public repo, merged once the tests pass.
+- Update from Max: the chat shows two links, Listen (edited) and Listen original, and each one streams audio so it plays on click.
+
+Worker 2, post-media:
+- A skill plus a CLI you can run yourself: post-media new, post-media render, post-media stills.
+- Formats: 1080x1350 for X and LinkedIn, 1080x1920 for reels, 1920x1080, plus still images.
+- Inputs: a post.json with the hook, 2 to 4 beats, the end card and an optional voiceover. earshot memos can be the voiceover.
+- Proof: it re-makes launch post A with the new template.
+
+Post A text for X, recommended:
+"my agent finishes a task while i'm driving. earshot turns the output into a 40-70 s voice memo and drops a Listen link in the chat, about 14 s later. github.com/example/earshot"
+
+Still on Max's side: pick the X angle (A, B or C), say "post" for LinkedIn, and run npm login and publish.

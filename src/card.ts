@@ -13,11 +13,6 @@ function clock(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-function mmss(s: number): string {
-  const t = Math.round(s);
-  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
-}
-
 const AGENTS: Record<string, string> = { stdin: "Agent report", "claude-code": "Claude Code", codex: "Codex" };
 
 /**
@@ -28,20 +23,23 @@ export function renderCard(meta: Meta, script: string | null): string {
   const id = meta.id;
   const e = escapeHtml;
   const base = `/b/${id}`;
-  const hasAudio = meta.audio !== null;
   const heading =
     meta.status === "pending" ? "Working on it" : meta.status === "failed" ? "Could not make this memo" : meta.title;
   const byline = `${AGENTS[meta.source.from] ?? "Agent report"}, ${clock(meta.created_at)}`;
-  const length = meta.audio?.duration_s != null ? mmss(meta.audio.duration_s) : "";
+  const tracks = meta.tracks;
+  const off = (t: "edited" | "original") => (tracks?.[t]?.status === "failed" ? " disabled" : "");
 
-  const player = hasAudio
+  const player = tracks
     ? `<section class="player" aria-label="Player">
-      <audio id="audio" src="${base}/memo.mp3" preload="metadata"></audio>
-      <button id="play" class="play" type="button" aria-label="Play"><span class="icon"></span></button>
-      <div class="timeline"><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="time" class="time">0:00 / ${e(length)}</span></div>
+      <div class="choices">
+        <button id="play-edited" class="choice primary" type="button" data-track="edited"${off("edited")}>Play edited</button>
+        <button id="play-original" class="choice" type="button" data-track="original"${off("original")}>Play original</button>
+      </div>
+      <div class="timeline"><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"><span id="time" class="time">0:00</span></div>
       <div class="extras"><button id="back" type="button" aria-label="Back 10 seconds">Back 10</button><button id="speed" type="button" aria-label="Speed">1x</button></div>
+      <audio id="audio" preload="none"></audio>
     </section>`
-    : `<section class="player"><button class="play" type="button" aria-label="Play" disabled><span class="icon"></span></button></section>`;
+    : "";
 
   const sketch = meta.image
     ? `<section class="sketch"><img src="${base}/sketch.svg" alt="${e(`Sketch: ${meta.title}`)}"></section>`

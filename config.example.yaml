@@ -6,7 +6,7 @@ llm:
   # claude-cli runs `claude -p` on your Claude subscription login. ANTHROPIC_API_KEY is
   # removed from the child environment, so this never bills API credits.
   type: claude-cli
-  model: haiku                    # sonnet or haiku
+  model: sonnet                   # sonnet streams its first words in about 1.5 s; haiku thinks first and takes about 9 s
   timeout_s: 90
   # command: claude               # binary to run
   #
@@ -25,6 +25,19 @@ tts:
   speed: 1.0
   api_key_env: ""                 # empty for local endpoints
   timeout_s: 120
+  profile: fast                   # which entry of profiles below is active
+  # A profile overrides base_url, model, voice, speed, api_key_env or timeout_s.
+  # Switch with the one line above.
+  profiles:
+    fast:                         # Kokoro: fastest first audio
+      base_url: http://localhost:8880/v1
+      model: kokoro
+      voice: af_heart
+    max:                          # a voice clone served OpenAI-style; slower, WAV output is converted with ffmpeg
+      base_url: http://localhost:8881/v1
+      model: f5
+      voice: me
+      timeout_s: 300
 
 image:
   type: mermaid                   # mermaid | none
@@ -52,3 +65,6 @@ trigger:                          # which Claude Code Stop events become a memo 
 
 # Langfuse tracing turns on only when LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY
 # (and optionally LANGFUSE_HOST) are set in the environment.
+
+script:
+  style: story   # story: a conversational memo; brief: the short status-style memo

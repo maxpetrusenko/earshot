@@ -1,16 +1,19 @@
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { lstat, readFile, readdir } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { join } from "node:path";
-import { briefDir } from "./bundle.js";
+import { briefDir, readFileInBundle, readMeta, withLegacyTracks, type TrackName } from "./bundle.js";
+import { renderCard } from "./card.js";
 import { isValidId } from "./lib/id.js";
 import { sweepBrief } from "./sweep.js";
 
 const ASSET_ROOT = new URL("../assets/", import.meta.url);
 
-/** The only files a brief exposes. input.txt and script.md are deliberately absent. */
+/** The only files a brief exposes. input.txt, script.md and the internal chunk files (edited-000.mp3 ...) are deliberately absent. */
 export const SERVED_FILES: Record<string, string> = {
-  "memo.mp3": "audio/mpeg",
+  "memo.mp3": "audio/mpeg", // briefs made before tracks existed; also the fallback for edited.mp3 there
+  "edited.mp3": "audio/mpeg",
+  "original.mp3": "audio/mpeg",
   "sketch.svg": "image/svg+xml",
   "sketch.png": "image/png",
   "meta.json": "application/json; charset=utf-8",
@@ -112,6 +115,45 @@ function pipeFile(res: ServerResponse, stream: ReturnType<typeof createReadStrea
   res.on("close", () => stream.destroy());
 }
 
+const STREAM_POLL_MS = 60;
+const STREAM_MAX_MS = 15 * 60_000;
+const nap = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * One growing MP3 over chunked transfer: send the chunk files already written, then keep appending as new ones
+ * land, and end when the track is ready or failed. A listener that opens the link while the memo is still being
+ * made starts hearing audio at the first chunk. Range requests are answered with the stream from the start.
+ */
+async function streamTrack(req: IncomingMessage, res: ServerResponse, id: string, track: TrackName) {
+  res.writeHead(200, { ...baseHeaders("audio/mpeg"), "Accept-Ranges": "none", "X-Accel-Buffering": "no" });
+  res.socket?.setNoDelay(true);
+  res.flushHeaders(); // the player sees a live stream at once and waits for the first chunk
+  if (req.method === "HEAD") return res.end();
+  let open = true;
+  res.on("close", () => (open = false));
+  const deadline = Date.now() + STREAM_MAX_MS;
+  let sent = 0;
+  let sweptAt = Date.now();
+  while (open && Date.now() < deadline) {
+    const meta = readMeta(id);
+    const t = meta?.tracks?.[track];
+    if (!t) break;
+    for (; sent < t.chunks.length && open; sent++) {
+      const buf = readFileInBundle(id, t.chunks[sent]!.file);
+      if (!buf) return res.destroy();
+      if (!res.write(buf)) await new Promise<void>((r) => (res.once("drain", r), res.once("close", r)));
+    }
+    if (t.status !== "pending") break;
+    if (meta!.status !== "pending") break; // the worker finished or died without finishing this track
+    if (Date.now() - sweptAt > 5000) {
+      sweptAt = Date.now();
+      sweepBrief(id);
+    }
+    await nap(STREAM_POLL_MS);
+  }
+  if (open) res.end();
+}
+
 export async function createEarshotServer(): Promise<Server> {
   const assets = await loadAssets();
   return createServer((req, res) => {
@@ -150,6 +192,18 @@ async function handle(req: IncomingMessage, res: ServerResponse, assets: Map<str
   // The card polls meta.json, so this is where a dead worker's brief stops showing "pending".
   if (file === undefined || file === "meta.json") sweepBrief(id);
   if (file === undefined) {
+    const old = readMeta(id);
+    if (old && old.tracks === undefined) {
+      // An old-format brief: render its card from the current template so the player works.
+      const meta = withLegacyTracks(old);
+      let script: string | null = null;
+      try {
+        script = readFileSync(join(briefDir(id), "script.md"), "utf8").split("\n\n").slice(1).join("\n\n").trim() || null;
+      } catch {
+        /* no transcript */
+      }
+      return send(res, 200, "text/html; charset=utf-8", renderCard(meta, script), CARD_CSP, head);
+    }
     const cardPath = join(briefDir(id), "card.html");
     const st = await lstat(cardPath).catch(() => null);
     const html = st?.isFile() ? await readFile(cardPath).catch(() => null) : null;
@@ -157,6 +211,18 @@ async function handle(req: IncomingMessage, res: ServerResponse, assets: Map<str
   }
   const type = Object.hasOwn(SERVED_FILES, file) ? SERVED_FILES[file] : undefined;
   if (!type) return notFound(res, head);
-  // `file` is now one of the four allowlisted constants, so the join cannot leave the brief directory.
+  if (file === "meta.json") {
+    const old = readMeta(id);
+    if (old && old.tracks === undefined) return send(res, 200, type, `${JSON.stringify(withLegacyTracks(old))}\n`, undefined, head);
+  }
+  if (file === "edited.mp3" || file === "original.mp3") {
+    const track = file === "edited.mp3" ? "edited" : "original";
+    const meta = readMeta(id);
+    const t = meta && withLegacyTracks(meta).tracks?.[track];
+    if (t && t.status === "pending") return streamTrack(req, res, id, track);
+    if (!t || t.status !== "ready") return notFound(res, head);
+    if (file === "edited.mp3" && meta!.tracks === undefined) file = "memo.mp3"; // old-format brief
+  }
+  // `file` is now one of the allowlisted constants, so the join cannot leave the brief directory.
   return serveFile(req, res, join(briefDir(id), file), type, file.endsWith(".svg") ? SVG_CSP : undefined);
 }

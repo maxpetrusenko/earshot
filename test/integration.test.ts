@@ -53,9 +53,14 @@ describe("pipeline against a fake OpenAI-compatible provider", () => {
     expect(meta.title).toBe("Fake title");
     expect(meta.audio.duration_s).toBeGreaterThan(1);
     expect(meta.image.renderer).toBe("beautiful-mermaid");
-    expect(meta.stages.map((s: { name: string }) => s.name).sort()).toEqual(["ear-script", "scrub", "sketch", "tts"]);
+    expect(meta.stages.map((s: { name: string }) => s.name).sort()).toEqual(["ear-script", "scrub", "sketch", "tts-edited", "tts-original"]);
     expect(meta.source.redacted).toBeGreaterThan(0);
-    expect(readdirSync(briefDir(id)).sort()).toEqual(["card.html", "input.txt", "memo.mp3", "meta.json", "script.md", "sketch.svg"]);
+    const files = readdirSync(briefDir(id)).sort();
+    expect(files.filter((f) => !/^(?:edited|original)-\d{3}\.mp3$/.test(f))).toEqual(["card.html", "edited.mp3", "input.txt", "meta.json", "original.mp3", "script.md", "sketch.svg"]);
+    expect(meta.tracks.edited.status).toBe("ready");
+    expect(meta.tracks.original.status).toBe("ready");
+    expect(meta.tracks.edited.chunks.length).toBeGreaterThan(1);
+    expect(meta.tracks.edited.first_audio_ms).toBeLessThan(meta.total_ms);
   });
   it("scrubs secrets before anything is stored or sent", () => {
     expect(readFileSync(join(briefDir(id), "input.txt"), "utf8")).not.toContain("sk-live");
@@ -64,7 +69,7 @@ describe("pipeline against a fake OpenAI-compatible provider", () => {
   it("degrades when tts is down", () => {
     const meta = JSON.parse(readFileSync(join(briefDir(degradedId), "meta.json"), "utf8"));
     expect(meta.status).toBe("degraded");
-    expect(meta.error).toContain("tts");
+    expect(meta.error).toContain("edited");
     expect(meta.audio).toBeNull();
     expect(meta.image).not.toBeNull();
   });
@@ -94,7 +99,7 @@ describe("serve security", () => {
     expect(card.headers.get("x-content-type-options")).toBe("nosniff");
     expect(card.headers.get("cache-control")).toContain("private");
     expect(card.headers.get("access-control-allow-origin")).toBeNull();
-    const mp3 = await get(`/b/${id}/memo.mp3`);
+    const mp3 = await get(`/b/${id}/edited.mp3`);
     expect(mp3.status).toBe(200);
     expect(mp3.headers.get("content-type")).toBe("audio/mpeg");
     const svg = await get(`/b/${id}/sketch.svg`);
@@ -106,11 +111,11 @@ describe("serve security", () => {
   });
 
   it("supports range requests", async () => {
-    const r = await get(`/b/${id}/memo.mp3`, { headers: { range: "bytes=0-99" } });
+    const r = await get(`/b/${id}/edited.mp3`, { headers: { range: "bytes=0-99" } });
     expect(r.status).toBe(206);
     expect(r.headers.get("content-range")).toMatch(/^bytes 0-99\/\d+$/);
     expect((await r.arrayBuffer()).byteLength).toBe(100);
-    expect((await get(`/b/${id}/memo.mp3`, { headers: { range: "bytes=99999999-" } })).status).toBe(416);
+    expect((await get(`/b/${id}/edited.mp3`, { headers: { range: "bytes=99999999-" } })).status).toBe(416);
   });
 
   it("returns 404 for traversal, wrong ids and unlisted files", async () => {
@@ -131,7 +136,7 @@ describe("serve security", () => {
       "/assets/../../package.json",
       "/assets/fonts/..%2f..%2fcard.css.map",
       `/b/${id}%00/memo.mp3`,
-      `/b/${id}/memo.mp3%00.txt`,
+      `/b/${id}/edited.mp3%00.txt`,
       "/b/AAAAAAAAAAAAAAAA",
     ];
     for (const p of paths) {
@@ -172,8 +177,8 @@ describe("cli contract", () => {
     writeFileSync(cfgPath, cfgYaml);
     const r = await run(["run", "--config", cfgPath], REPORT);
     expect(r.status).toBe(0);
-    expect(r.stdout.trim().split("\n")).toHaveLength(1);
-    expect(r.stdout).toMatch(/^Listen: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\n$/);
+    expect(r.stdout.trim().split("\n")).toHaveLength(2);
+    expect(r.stdout).toMatch(/^Listen: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\nListen original: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\n$/);
     expect(r.stderr).toContain("ear-script");
   });
   it("exits 2 on empty input", async () => {
@@ -191,14 +196,25 @@ describe("cli contract", () => {
     expect(r.stdout).toMatch(/^Listen: /);
     expect(r.stderr).toContain("degraded");
   });
-  it("exits 2 when the LLM fails twice", async () => {
+  it("keeps the original track when the script is too short", async () => {
     const bad = await startFakeProvider({ script: "far too short" });
     try {
       const cfgPath = join(home, "bad.yaml");
       writeFileSync(cfgPath, cfgYaml.replaceAll(provider.url, bad.url));
       const r = await run(["run", "--config", cfgPath], REPORT);
+      expect(r.status).toBe(0);
+      expect(r.stderr).toContain("degraded");
+    } finally {
+      bad.server.close();
+    }
+  });
+  it("exits 2 when the script and the audio both fail", async () => {
+    const bad = await startFakeProvider({ script: "far too short" });
+    try {
+      const cfgPath = join(home, "bad2.yaml");
+      writeFileSync(cfgPath, cfgYaml.replaceAll(provider.url, bad.url).replace(`base_url: ${bad.url}\nserve`, "base_url: http://127.0.0.1:9/v1\nserve"));
+      const r = await run(["run", "--config", cfgPath], REPORT);
       expect(r.status).toBe(2);
-      expect(r.stdout).toBe("");
     } finally {
       bad.server.close();
     }

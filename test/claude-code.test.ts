@@ -144,15 +144,15 @@ describe("Stop hook process", () => {
       const a = await spawnHook(env, payload);
       expect(a.ms).toBeLessThan(2000);
       const msg = JSON.parse(a.out).systemMessage as string;
-      expect(msg).toMatch(/^Listen: http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}$/);
-      first = msg.split("/b/")[1]!;
+      expect(msg).toMatch(/^Listen: http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/edited\.mp3\nListen original: http:\/\/localhost:17788\/b\/[A-Za-z0-9]{16}\/original\.mp3$/);
+      first = msg.split("/b/")[1]!.split("/")[0]!;
       const meta1 = JSON.parse(readFileSync(join(briefDir(first), "meta.json"), "utf8"));
       expect(meta1.status).toBe("pending");
       expect(meta1.source).toMatchObject({ from: "claude-code", session: "sess-queue" });
       expect(existsSync(join(process.env.EARSHOT_HOME!, "logs", `${first}.log`))).toBe(true);
 
       const b = await spawnHook(env, payload);
-      const second = (JSON.parse(b.out).systemMessage as string).split("/b/")[1]!;
+      const second = (JSON.parse(b.out).systemMessage as string).split("/b/")[1]!.split("/")[0]!;
       expect(second).not.toBe(first);
       const meta1b = JSON.parse(readFileSync(join(briefDir(first), "meta.json"), "utf8"));
       expect(meta1b).toMatchObject({ status: "failed", error: "superseded" });
