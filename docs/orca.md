@@ -2,33 +2,34 @@
 
 Read when: you run Claude Code inside Orca and want to tap Play in the chat instead of opening a link.
 
-Orca's native chat renders an HTML page inline when a reply has `::orca-visual{file="<name>.html" title="..."}` on its own line, with the file in `$ORCA_CHAT_SCRATCH_DIR`. earshot writes that page: two big buttons, Play (the edited memo) and Original, a time readout, and only one track plays at a time.
+Orca's native chat renders an HTML page inline when a reply has `::orca-visual{file="<name>.html" title="..."}` on its own line, with the file in `$ORCA_CHAT_SCRATCH_DIR`. earshot writes that page. The top shows the memo title and its sketch. The bottom is a compact bar: Play and Original (one track at a time, resume from the paused offset), a seek bar, back and forward 10 s, a speed button cycling 1x, 1.25x, 1.5x and 2x, and elapsed / total time. Space toggles play and pause when the frame has focus. Errors show in the status line under the bar.
 
-## Status: opt-in, desktop only, unverified
+## Status
 
-Off by default. The skill and the Stop hook still produce the markdown Listen line. On an iPhone, Orca's inline visuals did not respond to taps: JS buttons did nothing and native `<audio controls>` showed no play button, for both the embedded and the streamed page. Desktop Orca playback has not been checked. Use the plain Listen links on mobile.
+| Surface | What works |
+|---|---|
+| Orca desktop (Mac) | the inline player, confirmed 2026-11-12 |
+| Orca iOS | inline visuals are not tappable; use the markdown links |
+
+In Orca the skill prints two lines: the `::orca-visual` line for the Mac, then `[Listen](...) · [Original](...)` for the phone. Outside Orca it prints only the markdown line.
+
+## Why Web Audio
+
+Orca's content security policy blocks `data:` URLs for media, so `<audio src="data:audio/mpeg;base64,...">` fails with `NotSupportedError`. The page cannot fetch the audio either, because it has no network access. It embeds the MP3 as base64 text, decodes it with `AudioContext.decodeAudioData`, and plays it through an `AudioBufferSourceNode`. Seek, skip and speed changes stop the source and start a new one at the new offset, so the position is `offset + (context time - start time) * rate` at every speed.
 
 ## Use
 
 ```bash
-echo "<agent reply>" | earshot run --format orca
-# ::orca-visual{file="earshot-<id>.html" title="Listen"}
+echo "<agent reply>" | earshot run --format auto
 ```
 
-Run it yourself, or write your own skill that calls it when `ORCA_CHAT_SCRATCH_DIR` is set. The Stop hook does nothing when the reply already has an earshot `::orca-visual` line.
+`--format auto` picks the Orca output when `ORCA_CHAT_SCRATCH_DIR` is set and writable, and otherwise prints the links at once and finishes the memo in the background. `--format orca` forces the Orca output and falls back to the markdown line when the page cannot be made. `--orca-dir <path>` overrides the scratch directory. Orca output waits for the finished audio, so it cannot be combined with `--detach`.
 
-`--orca-dir <path>` overrides the scratch directory. If it is unset or not writable, or the edited track fails, earshot prints the markdown Listen line instead.
+The Stop hook treats either line as already narrated.
 
-## Two audio modes
+## Page size
 
-`orca.audio` in the config, or `--orca-audio` per run:
-
-| Mode | Page | Output line | Needs |
-|---|---|---|---|
-| `inline` (default) | audio embedded as `data:` URLs, under 480 KB | after both tracks are finished | nothing else, the page cannot make network requests |
-| `stream` | audio elements point at the served MP3s, a few KB | at once, the memo is made in the background | `earshot serve` reachable from the device |
-
-Inline pages are re-encoded with ffmpeg to mono, 22.05 kHz MP3. earshot predicts the page size from the track durations, picks 24k, 20k or 16k, and encodes once. If 16k still does not fit, the original track is dropped and the page says so. Orca's limit is 512 KB per page and a new file name each time; the file is `earshot-<brief id>.html`.
+The page embeds both tracks, re-encoded with ffmpeg to mono, 22.05 kHz MP3, plus the sketch. earshot predicts the size from the track durations, picks 24k, 20k or 16k, and encodes once. Budget is 480 KB (Orca's limit is 512 KB). If 16k still does not fit, the original track is dropped and the page says so. The file is `earshot-<brief id>.html`; each page needs a new file name.
 
 ## Speed
 
@@ -57,5 +58,5 @@ The script from the model takes about 6 s of that; the rest is speech synthesis.
 
 ## Limits
 
-- Not verified: whether Orca re-renders a file in place when it is rewritten. Each page needs a new file name, so an "original first, edited later" update would need a second reply with a second file.
-- The page cannot reach the network in `inline` mode and uses Orca theme tokens with fallbacks; it never redefines a token and avoids `100vh`.
+- Not verified: whether Orca re-renders a file in place when it is rewritten. Each page needs a new file name.
+- The page uses Orca theme tokens with fallbacks; it never redefines a token and avoids `100vh`.

@@ -19,12 +19,14 @@ Run this once, at the very end of every reply to the user, tool use or not (a re
 2. Pass that reply to earshot word for word. It is not a summary, not a rewrite, not an earlier reply and not text from another task. Use only this turn's final reply. Put it in the heredoc body unchanged:
 
 ```bash
-{{EARSHOT}} run --detach --from claude-code --session "${CLAUDE_SESSION_ID}" <<'EARSHOT_EOF'
+{{EARSHOT}} run --format auto --from claude-code --session "${CLAUDE_SESSION_ID}" <<'EARSHOT_EOF'
 <your final reply, exactly as you will send it>
 EARSHOT_EOF
 ```
 
-3. The command prints one markdown line at once, like `[Listen](<url>) · [Original](<url>)`. Each link starts playing when tapped. Copy the line verbatim.
-4. Send your final reply, unchanged. Make the last line of the message exactly that markdown line, with nothing after it. Do not add the card link or any other link, and do not turn the links into raw URLs.
+3. Outside Orca the command prints one markdown line at once, like `[Listen](<url>) · [Original](<url>)`. Each link starts playing when tapped.
+   Inside Orca (`ORCA_CHAT_SCRATCH_DIR` is set and writable) it waits for the finished audio, about 20 to 40 seconds, and prints two lines: `::orca-visual{file="earshot-<id>.html" title="Listen"}` for the Mac player, then the markdown line for the phone.
+   Copy what it prints verbatim.
+4. Send your final reply, unchanged. Make the last lines of the message exactly what the command printed, with nothing after them: the single markdown line, or in Orca the `::orca-visual` line on its own line (outside any code block) followed by the markdown line. Do not add the card link or any other link, and do not turn the links into raw URLs.
 
 If the command fails or prints no `[Listen](` line, say so in one sentence and do not invent a link.

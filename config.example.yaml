@@ -69,6 +69,3 @@ trigger:                          # which Claude Code Stop events become a memo 
 
 script:
   style: short   # short: a 20 to 40 second summary; story: a longer conversational memo; brief: the terse status-style memo
-
-orca:
-  audio: inline                   # inline: embed the audio in the page (waits for it); stream: link the served MP3s (instant)
