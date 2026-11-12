@@ -33,6 +33,16 @@
               "kind": "row",
               "text": "200 invoices per page",
               "state": "muted"
+            },
+            {
+              "kind": "controls",
+              "text": "Filter|Sort|Export CSV",
+              "state": "muted"
+            },
+            {
+              "kind": "row",
+              "text": "Page 1 of 12",
+              "state": "muted"
             }
           ]
         },
@@ -63,6 +73,16 @@
             {
               "kind": "row",
               "text": "Uses the existing customer index",
+              "state": "muted"
+            },
+            {
+              "kind": "controls",
+              "text": "Filter|Sort|Export CSV",
+              "state": "muted"
+            },
+            {
+              "kind": "row",
+              "text": "Page 1 of 12",
               "state": "muted"
             }
           ]
