@@ -119,7 +119,11 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
   };
   const onInt = abort("interrupted (SIGINT)", 130);
   const onTerm = abort("terminated (SIGTERM)", 143);
-  const onCrash = (e: unknown) => abort(`crashed: ${errMsg(e)}`, 1)();
+  const onCrash = (e: unknown) => {
+    // A crash must be visible: log the stack before the brief is marked failed.
+    process.stderr.write(`earshot: crashed: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}\n`);
+    abort(`crashed: ${errMsg(e)}`, 1)();
+  };
   process.on("SIGINT", onInt);
   process.on("SIGTERM", onTerm);
   process.on("uncaughtException", onCrash);

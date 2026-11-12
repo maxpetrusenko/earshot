@@ -20,12 +20,12 @@ body{margin:0;font-family:${SANS};font-size:16px;line-height:1.35;color:${FG}}
 .ex{max-width:1200px;margin:0 auto;padding:14px 12px 16px}
 h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}
 .tk{margin:0 0 12px;font-size:17px;color:${MUTED}}
-.ps{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+.ps{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
 .pn{display:flex;flex-direction:column;background:${CARD};border:1px solid ${LINE};border-top:5px solid ${MUTED};border-radius:12px;padding:12px 12px 14px;box-shadow:0 8px 20px -12px rgba(27,27,24,.35)}
 .pn.a{border-top-color:${ACC}}
 .pn h2{font-size:17px;margin:0 0 10px;font-weight:700}
 .pn.a h2{color:${ACC}}
-.fr{flex:1;border:1.5px solid ${FG};border-radius:10px;overflow:hidden;background:#fffdf8}
+.fr{border:1.5px solid ${FG};border-radius:10px;overflow:hidden;background:#fffdf8}
 .fr.phone{max-width:300px;margin:0 auto;border-radius:26px;border-width:2px}
 .tb{display:flex;align-items:center;gap:6px;padding:7px 10px;background:${SOFT};border-bottom:1.5px solid ${FG};font-size:13px;color:${MUTED}}
 .tb i{width:10px;height:10px;border-radius:50%;background:#bdb5a3;display:block}
@@ -40,6 +40,8 @@ h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weig
 .ctl span{padding:6px 12px;border-radius:999px;border:1.5px solid ${ACC};color:${ACC};font-weight:700;font-size:15px}
 .ctl.s-good span:first-child{background:${ACC};color:#fff}
 .ctl.s-bad span{border-color:${BAD};color:${BAD}}
+.ctl.s-muted span{border-color:#bdb5a3;color:${MUTED};font-weight:600}
+.ctl.s-muted span{border-color:#b9b1a0;color:${MUTED};font-weight:600}
 .btn{border-radius:999px;text-align:center;font-weight:700;border-color:${ACC};color:${ACC}}
 .btn.s-good{background:${ACC};color:#fff}
 .btn.s-bad{color:${BAD};border-color:${BAD}}
@@ -56,8 +58,9 @@ h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weig
 .bar.s-bad .trk b{background:${BAD}}
 .ew{display:flex;flex-direction:column;gap:3px}
 .ew.hl>.el{outline:3px solid ${HL};outline-offset:3px}
-.an{display:flex;align-items:flex-start;gap:6px;color:${HL};font-weight:700;font-size:14px;line-height:1.25;padding:2px 0 0 10px}
-.an svg{flex:none}
+.an{display:flex;align-items:flex-start;gap:5px;color:${HL};font-weight:700;font-size:13px;line-height:1.22;padding:3px 2px 0 6px;max-width:100%}
+.an span{min-width:0;overflow-wrap:anywhere}
+.an svg{flex:none;margin-top:1px}
 .wv{display:flex;align-items:center;gap:10px;padding:8px 12px}
 .wb{display:flex;align-items:center;gap:2px;height:34px;flex:1}
 .wb i{display:block;flex:1;min-width:2px;background:#cfc6b2;border-radius:2px}
@@ -70,7 +73,7 @@ h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weig
 .st small{font-size:13px;font-weight:700;color:${MUTED}}
 .sn{position:absolute;left:10px;top:9px;width:24px;height:24px;border-radius:50%;background:${FG};color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px}
 .sa{display:none}
-.cp{margin:12px 0 0;padding-top:10px;border-top:1px solid ${LINE};font-size:16px;font-weight:600;color:${FG}}
+.cp{margin:auto 0 0;padding-top:9px;border-top:1px solid ${LINE};font-size:15.5px;font-weight:600;color:${FG}}
 .row{border-radius:6px}
 .dg{display:block;width:100%;height:auto}
 .dg .lb{fill:${FG};font-family:${SANS}}
@@ -82,6 +85,10 @@ h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weig
 .dg .sg.s-muted{fill:#bdb5a3}
 .dg .sl{fill:#fff;font-family:${SANS}}
 .dg .sl.s-muted{fill:${FG}}
+.dg .so{font-family:${SANS}}
+.dg .so.s-normal,.dg .so.s-muted{fill:${FG}}
+.dg .so.s-good{fill:${ACC}}
+.dg .so.s-bad{fill:${BAD}}
 .dg .mk{stroke:${HL};stroke-width:3}
 .dg .mkh{fill:${HL}}
 .dg .ax{stroke:${MUTED};stroke-width:1.5}
@@ -98,7 +105,7 @@ h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weig
 .mx li{background:${CARD};border:1px solid ${LINE};border-radius:10px;padding:10px 12px}
 .ml{display:block;font-size:14px;color:${MUTED};margin-bottom:2px}
 .mv{font-family:${SERIF};font-size:26px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.mv s{font-size:20px;color:${MUTED};font-weight:400;text-decoration-thickness:2px}
+.mv s{font-size:20px;color:${MUTED};font-weight:400;text-decoration-thickness:1px;text-decoration-color:#9a9482}
 .mv b{color:${ACC}}
 .tg{display:block;width:100%;font-family:${SANS};font-size:13px;font-weight:600;color:${MUTED}}
 .tg.ms{color:${ACC}}

@@ -81,7 +81,9 @@ function body(p: Panel, i: number, tmax: number): string {
 
 function metric(m: Metric): string {
   const value = m.before ? `<s>${e(m.before)}</s>${ARROW_R}<b>${e(m.after)}</b>` : `<b>${e(m.after)}</b>`;
-  const note = m.verified ? `measured${m.source ? `, ${e(m.source)}` : ""}` : "target";
+  const src = m.source.replace(/^measured\s*/i, "").trim();
+  // "measured on the staging copy" reads as one phrase; a bare noun needs the comma.
+  const note = m.verified ? (src ? (/^(?:on|in|by|from|at)\b/i.test(src) ? `measured ${e(src)}` : `measured, ${e(src)}`) : "measured") : "target";
   return `<li><span class="ml">${e(m.label)}</span><span class="mv">${value}</span><span class="tg${m.verified ? " ms" : ""}">${note}</span></li>`;
 }
 

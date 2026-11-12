@@ -4,7 +4,7 @@ import type { ExplainSpec, Panel } from "./explain-schema.js";
 const EMPTY_LABELS = /^(?:fixed|implemented|completed|merged)[.!]?$/i;
 
 /** Text that stands in for a picture instead of being one. */
-const PLACEHOLDER = /\b(diagram|screenshot|placeholder|mockup|wireframe|tbd|todo|image of|picture of|lorem)\b/i;
+const PLACEHOLDER = /^(?:diagram|screenshot|mock ?up|wireframe|placeholder|todo|tbd|image|picture)(?:\s+of)?(?:\s+here)?[.!]?$/i;
 
 /** Every box-like label in a panel: elements, segments, lanes, actors, components, io fields. */
 function labels(p: Panel): string[] {

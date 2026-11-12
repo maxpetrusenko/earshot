@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildExplain, loadExplainPrompt } from "../src/explain.js";
-import { explainGate } from "../src/explain-gate.js";
+import { explainGate, MIN_DENSITY, visualDensity } from "../src/explain-gate.js";
 import { renderExplainHtml } from "../src/explain-render.js";
-import { cleanText, ExplainError, parseExplain, type ExplainSpec } from "../src/explain-schema.js";
+import { cleanText, ExplainError, parseExplain, parseExplainAll, type ExplainSpec } from "../src/explain-schema.js";
 import type { LlmProvider } from "../src/llm.js";
 import { EXPLAIN_SPEC } from "./explain-fixtures.js";
 
@@ -115,6 +115,66 @@ describe("explainGate", () => {
   });
 });
 
+describe("visualDensity and multiple visuals", () => {
+  it("drops a candidate whose area is mostly sentences", () => {
+    const o = {
+      type: "ui_before_after",
+      title: "A page of prose",
+      takeaway: "This picture is a sentence with a border around it, which is exactly what a picture should not be, because the reader has to read every word of it instead of seeing the change at a glance.",
+      panels: [
+        {
+          label: "Before",
+          caption: "You read a paragraph here instead of looking at a control or a bar.",
+          frame: "plain",
+          title: "",
+          elements: [
+            { kind: "text", text: "A long sentence standing in for an interface that was never drawn at all, which tells the reader nothing they could not read in the reply itself and takes the whole panel to do it." },
+            { kind: "text", text: "Another long sentence standing in for a second thing that should have been a control, a bar or a waveform, and is not." },
+            { kind: "text", text: "A third long sentence that exists only to make the text share of this panel much larger than the drawn share of this panel." },
+            { kind: "row", text: "one row" },
+            { kind: "row", text: "two row" },
+            { kind: "button", text: "three" },
+          ],
+        },
+        {
+          label: "After",
+          caption: "You read another paragraph, and the density score shows it.",
+          frame: "plain",
+          title: "",
+          elements: [
+            { kind: "text", text: "A fourth long sentence that exists only to make the text share of this panel much larger than the drawn share of this panel, which is the whole point of the check." },
+            { kind: "text", text: "A fifth long sentence that exists only to make the text share of this panel much larger than the drawn share, again." },
+            { kind: "text", text: "A sixth long sentence that exists only to make the text share of this panel much larger than the drawn share." },
+            { kind: "row", text: "one row" },
+            { kind: "row", text: "two row" },
+            { kind: "button", text: "three" },
+          ],
+        },
+      ],
+      callouts: ["one", "two"],
+      metrics: [],
+      assumptions: [],
+    };
+    const s = spec(o);
+    expect(visualDensity(s)).toBeLessThan(MIN_DENSITY);
+    expect(explainGate(s)).toMatch(/mostly text/);
+  });
+  it("parses one object or up to three visuals from one answer", () => {
+    expect(parseExplainAll(EXPLAIN_SPEC)).toHaveLength(1);
+    expect(parseExplainAll({ visuals: [EXPLAIN_SPEC, TIMELINE, SEQUENCE] })).toHaveLength(3);
+    expect(parseExplainAll({ visuals: [EXPLAIN_SPEC, EXPLAIN_SPEC, EXPLAIN_SPEC, EXPLAIN_SPEC] })).toHaveLength(3);
+    expect(parseExplainAll({ no_image: true })).toEqual([]);
+  });
+  it("renders each visual as its own page with its own headline", async () => {
+    const llm = fake({ visuals: [EXPLAIN_SPEC, TIMELINE] });
+    const r = await buildExplain(llm, "x");
+    expect(r.visuals).toHaveLength(2);
+    expect(r.visuals[0]!.html).toContain("<h1>Retries now stop at five</h1>");
+    expect(r.visuals[1]!.html).toContain("<h1>Original audio starts sooner</h1>");
+    expect(r.html).toBe(r.visuals[0]!.html);
+  });
+});
+
 describe("renderExplainHtml", () => {
   it.each(Object.keys(ALL))("renders %s with escaped values and a clean page", (name) => {
     const o = clone(ALL[name as keyof typeof ALL]) as Record<string, unknown>;
@@ -168,8 +228,24 @@ describe("renderExplainHtml", () => {
     const html = renderExplainHtml(spec(o));
     expect(html).toContain("0.6 s");
     expect(html.match(/class="tg">target</g)).toHaveLength(1);
-    expect(html).toContain("measured, measured on pro, 1.5 KB reply");
+    expect(html).toContain("measured on pro, 1.5 KB reply");
     expect(html.indexOf("Goal")).toBeLessThan(html.indexOf("target"));
+    // A source that does not start with a preposition needs the comma: "measured, query log".
+    const bare = clone(EXPLAIN_SPEC);
+    bare.metrics = [{ label: "Measured", before: "201", after: "1", verified: true, source: "query log" }];
+    expect(renderExplainHtml(spec(bare))).toContain("measured, query log");
+  });
+  it("prints sub-second times in ms and puts a name too long for its bar beside it", () => {
+    const t = clone(TIMELINE);
+    t.panels = [
+      { label: "Before: 201 queries", caption: "Each lookup waited for the one before it.", unit: "s", lanes: [{ label: "Customer lookups", marker: 1.8, marker_label: "page usable at 1.8 s", segments: [{ label: "one query per row, one at a time", start: 0, duration: 1.8, state: "bad" }] }] },
+      { label: "After: one query", caption: "The joined query returns the list and every name together.", unit: "s", lanes: [{ label: "After: one query", marker: 0.24, marker_label: "page usable at 240 ms", segments: [{ label: "invoices and customers joined", start: 0, duration: 0.24, state: "good" }] }] },
+    ];
+    const html = renderExplainHtml(spec(t));
+    expect(html).toContain("240 ms");
+    expect(html).toContain('class="so s-good"');
+    expect(html).toContain("invoices and customers joined");
+    expect(html).not.toContain("…</text>");
   });
   it("stacks the panels on a narrow screen and splits them on a wide one", () => {
     const html = renderExplainHtml(spec());

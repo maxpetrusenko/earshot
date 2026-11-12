@@ -60,6 +60,10 @@ echo "Fixed the flaky webhook retries. The counter reset on every 5xx, so a dead
 
 Tap either word (or open the URL). Audio starts while the memo is still being made: the original in about 1.5 seconds, the edited memo in about 4. Both links are one MP3 that keeps growing until the track is complete, then it becomes a normal seekable file. The card with the diagram and transcript is at `/b/<id>`; `--format plain` prints the old two lines (`Listen: <url>` and `Original: <url>`), and `--format json` prints `{listen, listen_original, card, id}`.
 
+## Examples
+
+[`examples/`](examples/README.md) runs one reply through the whole pipeline: the two audio tracks, the edited script with the reasoning behind it, and two explainer pages with the data that drew them.
+
 ## Integrations
 
 | Agent | Command | How the link reaches you |

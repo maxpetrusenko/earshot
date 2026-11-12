@@ -40,6 +40,12 @@ export function timelineMax(panels: TimelinePanel[]): number {
   return m || 1;
 }
 
+/** A duration as people read it: short spans in ms, longer ones in the panel's own unit. */
+export function timeText(v: number, unit: string): string {
+  if (unit === "s" && v > 0 && v < 1) return `${Math.round(v * 1000)} ms`;
+  return `${fmt(v)} ${unit}`;
+}
+
 export function timelineSvg(p: TimelinePanel, max: number, uid: string): string {
   const track = W - PAD * 2;
   const scale = track / max;
@@ -48,32 +54,45 @@ export function timelineSvg(p: TimelinePanel, max: number, uid: string): string 
   for (const lane of p.lanes) {
     const end = lane.segments.reduce((m, s) => Math.max(m, s.start + s.duration), 0);
     body += `<text x="${PAD}" y="${y + 15}" class="lb" font-size="14">${e(lane.label)}</text>`;
-    if (end > 0) body += `<text x="${W - PAD}" y="${y + 15}" class="lm" font-size="14" text-anchor="end">${e(fmt(end))} ${e(p.unit)}</text>`;
+    if (end > 0) body += `<text x="${W - PAD}" y="${y + 15}" class="lm" font-size="14" text-anchor="end">${e(timeText(end, p.unit))}</text>`;
     body += `<rect x="${PAD}" y="${y + 22}" width="${track}" height="34" rx="6" class="tr"/>`;
     for (const s of lane.segments) {
       const x = PAD + s.start * scale;
       const w = Math.max(2, s.duration * scale);
       body += `<rect x="${fmt(x)}" y="${y + 22}" width="${fmt(w)}" height="34" rx="6" class="${segClass(s.state)}"/>`;
-      const fit = Math.floor((w - 10) / CH);
-      if (s.label && fit >= 3) {
-        const t = s.label.length <= fit ? s.label : `${s.label.slice(0, fit - 1)}…`;
+      if (!s.label) continue;
+      const fit = Math.floor((w - 12) / CH);
+      const right = W - PAD - (x + w) - 10; // room for a label beside the bar
+      const left = x - PAD - 10;
+      if (s.label.length <= fit) {
+        // Fits inside: white on the colored bar, centered.
+        body += `<text x="${fmt(x + w / 2)}" y="${y + 44}" class="sl s-${s.state}" font-size="13" font-weight="600" text-anchor="middle">${e(s.label)}</text>`;
+      } else if (s.label.length * CH <= right) {
+        // Too narrow to hold its own name: draw the name beside the bar, in bar ink.
+        body += `<text x="${fmt(x + w + 7)}" y="${y + 44}" class="so s-${s.state}" font-size="13" font-weight="600">${e(s.label)}</text>`;
+      } else if (s.label.length * CH <= left) {
+        body += `<text x="${fmt(x - 7)}" y="${y + 44}" class="so s-${s.state}" font-size="13" font-weight="600" text-anchor="end">${e(s.label)}</text>`;
+      } else if (fit >= 3) {
+        // No room beside it either: keep the start of the name on the bar.
+        const t = `${s.label.slice(0, fit - 1)}…`;
         body += `<text x="${fmt(x + w / 2)}" y="${y + 44}" class="sl s-${s.state}" font-size="13" font-weight="600" text-anchor="middle">${e(t)}</text>`;
       }
     }
     if (lane.marker >= 0) {
+      // A tick under the bar, arrowhead on the bar's edge, so it never draws over a colored segment.
       const mx = PAD + lane.marker * scale;
-      body += `<line x1="${fmt(mx)}" y1="${y + 18}" x2="${fmt(mx)}" y2="${y + 62}" class="mk"/><path d="M${fmt(mx - 6)} ${y + 18}h12l-6 9z" class="mkh"/>`;
+      const tx = Math.min(Math.max(mx, PAD + 5), W - PAD - 5); // keep the arrowhead inside the frame
+      body += `<line x1="${fmt(mx)}" y1="${y + 62}" x2="${fmt(mx)}" y2="${y + 76}" class="mk"/><path d="M${fmt(tx - 5)} ${y + 66}L${fmt(tx)} ${y + 57}L${fmt(tx + 5)} ${y + 66}z" class="mkh"/>`;
       if (lane.markerLabel) {
         const t = lane.markerLabel;
         const tw = t.length * 6.8;
         const anchorEnd = mx + tw + 10 > W - PAD;
-        body += `<text x="${fmt(anchorEnd ? mx - 8 : mx + 8)}" y="${y + 74}" class="lb" font-size="13" font-weight="700" text-anchor="${anchorEnd ? "end" : "start"}">${e(t)}</text>`;
-      }
-      y += 12;
-    }
-    y += 68;
+        body += `<text x="${fmt(anchorEnd ? mx - 6 : mx + 6)}" y="${y + 88}" class="lb" font-size="13" font-weight="700" text-anchor="${anchorEnd ? "end" : "start"}">${e(t)}</text>`;
+        y += 92;
+      } else y += 68;
+    } else y += 68;
   }
-  body += `<line x1="${PAD}" y1="${y + 2}" x2="${W - PAD}" y2="${y + 2}" class="ax"/><text x="${PAD}" y="${y + 20}" class="lm" font-size="12">0</text><text x="${W - PAD}" y="${y + 20}" class="lm" font-size="12" text-anchor="end">${e(fmt(max))} ${e(p.unit)}</text>`;
+  body += `<line x1="${PAD}" y1="${y + 2}" x2="${W - PAD}" y2="${y + 2}" class="ax"/><text x="${PAD}" y="${y + 20}" class="lm" font-size="12">0</text><text x="${W - PAD}" y="${y + 20}" class="lm" font-size="12" text-anchor="end">${e(timeText(max, p.unit))}</text>`;
   return svg(W, y + 28, `a${uid}`, body);
 }
 

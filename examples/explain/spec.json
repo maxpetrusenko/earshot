@@ -1,0 +1,168 @@
+{
+  "visuals": [
+    {
+      "title": "The invoice page loads in one query",
+      "takeaway": "You see the whole list with customer names at once instead of watching rows fill in one by one.",
+      "type": "ui_before_after",
+      "panels": [
+        {
+          "label": "Before: one lookup per row",
+          "caption": "You waited 1.8 s while the page fetched each customer name separately, 200 times.",
+          "frame": "mac",
+          "title": "Invoices, staging",
+          "elements": [
+            {
+              "kind": "row",
+              "text": "INV-1042 \u00b7 customer loading",
+              "state": "normal"
+            },
+            {
+              "kind": "row",
+              "text": "INV-1043 \u00b7 customer loading",
+              "state": "muted"
+            },
+            {
+              "kind": "bar",
+              "text": "Customers loaded: 12 of 200",
+              "value": 6,
+              "state": "bad",
+              "highlight": true,
+              "note": "one query per invoice, each one waits"
+            },
+            {
+              "kind": "row",
+              "text": "200 invoices per page",
+              "state": "muted"
+            }
+          ]
+        },
+        {
+          "label": "After: one joined query",
+          "caption": "The list is usable in 240 ms and every row already shows its customer.",
+          "frame": "mac",
+          "title": "Invoices, staging",
+          "elements": [
+            {
+              "kind": "row",
+              "text": "INV-1042 \u00b7 Acme Ltd",
+              "state": "normal"
+            },
+            {
+              "kind": "row",
+              "text": "INV-1043 \u00b7 Bodega Nine",
+              "state": "normal"
+            },
+            {
+              "kind": "bar",
+              "text": "Customers loaded: 200 of 200",
+              "value": 100,
+              "state": "good",
+              "highlight": true,
+              "note": "invoice and customer joined before returning"
+            },
+            {
+              "kind": "row",
+              "text": "Uses the existing customer index",
+              "state": "muted"
+            }
+          ]
+        }
+      ],
+      "callouts": [],
+      "metrics": [
+        {
+          "label": "Page ready",
+          "before": "1.8 s",
+          "after": "240 ms",
+          "verified": true,
+          "source": "measured on the staging copy, 200 invoices"
+        }
+      ],
+      "assumptions": []
+    },
+    {
+      "title": "Two hundred round trips become one",
+      "takeaway": "The database answers once instead of two hundred times, so the page stops waiting in line.",
+      "type": "timeline",
+      "panels": [
+        {
+          "label": "Before: queries in single file",
+          "caption": "Each customer lookup waited for the previous one before it could start.",
+          "unit": "s",
+          "lanes": [
+            {
+              "label": "Invoice list",
+              "marker": -1,
+              "marker_label": "",
+              "segments": [
+                {
+                  "label": "200 rows",
+                  "start": 0,
+                  "duration": 0.04,
+                  "state": "normal"
+                }
+              ]
+            },
+            {
+              "label": "Customer lookups",
+              "marker": 1.8,
+              "marker_label": "page usable at 1.8 s",
+              "segments": [
+                {
+                  "label": "one query per row, one at a time",
+                  "start": 0.04,
+                  "duration": 1.76,
+                  "state": "bad"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "After: one join",
+          "caption": "The joined query returns the list and every name together.",
+          "unit": "s",
+          "lanes": [
+            {
+              "label": "Invoice rows",
+              "marker": 0.24,
+              "marker_label": "page usable at 240 ms",
+              "segments": [
+                {
+                  "label": "read from the invoice table",
+                  "start": 0,
+                  "duration": 0.24,
+                  "state": "good"
+                }
+              ]
+            },
+            {
+              "label": "Customer names",
+              "marker": -1,
+              "marker_label": "",
+              "segments": [
+                {
+                  "label": "joined in the same query",
+                  "start": 0,
+                  "duration": 0.24,
+                  "state": "good"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "callouts": [],
+      "metrics": [
+        {
+          "label": "Queries per page",
+          "before": "201",
+          "after": "1",
+          "verified": true,
+          "source": "from the query log on the staging copy"
+        }
+      ],
+      "assumptions": []
+    }
+  ]
+}

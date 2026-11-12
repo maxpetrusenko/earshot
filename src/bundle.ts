@@ -111,7 +111,7 @@ export function writeBrief(meta: Meta, script: string | null): void {
   atomicWrite(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
 }
 
-const BUNDLE_FILE = /^(?:(?:edited|original)(?:-\d{3})?\.mp3|sketch\.svg|explain\.html)$/;
+const BUNDLE_FILE = /^(?:(?:edited|original)(?:-\d{3})?\.mp3|sketch\.svg|explain[123]?\.html)$/;
 
 export function writeFileInBundle(id: string, name: string, data: Buffer | string): void {
   if (!BUNDLE_FILE.test(name)) throw new Error(`not a bundle file: ${name}`);

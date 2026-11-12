@@ -144,11 +144,11 @@ function timelinePanel(p: Record<string, unknown>): TimelinePanel {
       const q = rec(s);
       const duration = num(q.duration, 0, 100000, 0);
       if (duration <= 0) continue;
-      segments.push({ label: cleanText(q.label, 24), start: num(q.start, 0, 100000, 0), duration, state: oneOf(q.state, STATES, "normal") });
+      segments.push({ label: cleanText(q.label, 40), start: num(q.start, 0, 100000, 0), duration, state: oneOf(q.state, STATES, "normal") });
     }
     const label = cleanText(r.label, 36);
     const marker = num(r.marker, 0, 100000, -1);
-    if (label || segments.length) lanes.push({ label, segments, marker, markerLabel: cleanText(r.marker_label, 24) });
+    if (label || segments.length) lanes.push({ label, segments, marker, markerLabel: cleanText(r.marker_label, 32) });
   }
   return { kind: "timeline", label: cleanText(p.label, 50), unit: cleanText(p.unit, 4) || "s", lanes, caption: cleanText(p.caption, 120) };
 }

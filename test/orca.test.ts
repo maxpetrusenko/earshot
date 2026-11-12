@@ -220,4 +220,34 @@ describe("earshot run --format orca", () => {
       rmSync(d2, { recursive: true, force: true });
     }
   });
+  it("three visuals become three explain pages, each with its own headline, before the links", async () => {
+    const titles = ["Retries now stop at five", "Customer names load together", "Dead letter after five tries"];
+    const p = await startFakeProvider({ explain: { visuals: titles.map((title) => ({ ...EXPLAIN_SPEC, no_image: false, title })) } });
+    const cfg3 = join(home, "cfg3.yaml");
+    writeFileSync(cfg3, `llm:\n  type: openai-compatible\n  base_url: ${p.url}\n  model: fake\ntts:\n  base_url: ${p.url}\nserve:\n  mode: loopback\n  port: 17779\n`);
+    const d3 = mkdtempSync(join(tmpdir(), "earshot-orca-three-"));
+    try {
+      const r = await new Promise<string>((resolve) => {
+        const e: NodeJS.ProcessEnv = { ...process.env, EARSHOT_HOME: home, ORCA_CHAT_SCRATCH_DIR: d3 };
+        for (const k of ["NODE_USE_ENV_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"]) delete e[k];
+        const child = spawn("npx", ["tsx", "src/cli.ts", "run", "--config", cfg3, "--format", "auto"], { env: e, cwd: join(import.meta.dirname, "..") });
+        let out = "";
+        child.stdout.on("data", (x) => (out += x));
+        child.on("close", () => resolve(out));
+        child.stdin.end(report);
+      });
+      const lines = r.trim().split("\n");
+      expect(lines).toHaveLength(5); // player, three explain pages, links last
+      expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
+      titles.forEach((t, i) => expect(lines[i + 1]).toContain(`title="${t}"`));
+      expect(lines[4]).toMatch(/^\[Listen\]\(/);
+      const files = readdirSync(d3);
+      for (const kind of ["explain", "explain2", "explain3"]) expect(files.some((f) => f.endsWith(`-${kind}.html`))).toBe(true);
+      const third = readFileSync(join(d3, files.find((f) => f.endsWith("-explain3.html"))!), "utf8");
+      expect(third).toContain("<h1>Dead letter after five tries</h1>");
+    } finally {
+      p.server.close();
+      rmSync(d3, { recursive: true, force: true });
+    }
+  });
 });
