@@ -60,6 +60,17 @@ export function timelineSvg(p: TimelinePanel, max: number, uid: string): string 
         body += `<text x="${fmt(x + w / 2)}" y="${y + 44}" class="sl s-${s.state}" font-size="13" font-weight="600" text-anchor="middle">${e(t)}</text>`;
       }
     }
+    if (lane.marker >= 0) {
+      const mx = PAD + lane.marker * scale;
+      body += `<line x1="${fmt(mx)}" y1="${y + 18}" x2="${fmt(mx)}" y2="${y + 62}" class="mk"/><path d="M${fmt(mx - 6)} ${y + 18}h12l-6 9z" class="mkh"/>`;
+      if (lane.markerLabel) {
+        const t = lane.markerLabel;
+        const tw = t.length * 6.8;
+        const anchorEnd = mx + tw + 10 > W - PAD;
+        body += `<text x="${fmt(anchorEnd ? mx - 8 : mx + 8)}" y="${y + 74}" class="lb" font-size="13" font-weight="700" text-anchor="${anchorEnd ? "end" : "start"}">${e(t)}</text>`;
+      }
+      y += 12;
+    }
     y += 68;
   }
   body += `<line x1="${PAD}" y1="${y + 2}" x2="${W - PAD}" y2="${y + 2}" class="ax"/><text x="${PAD}" y="${y + 20}" class="lm" font-size="12">0</text><text x="${W - PAD}" y="${y + 20}" class="lm" font-size="12" text-anchor="end">${e(fmt(max))} ${e(p.unit)}</text>`;

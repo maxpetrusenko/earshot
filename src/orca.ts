@@ -159,7 +159,7 @@ export function orcaDir(flag?: string, env: NodeJS.ProcessEnv = process.env): st
   }
 }
 
-export type OrcaKind = "player" | "explain";
+export type OrcaKind = "player" | "explain" | "explain2" | "explain3";
 
 export const orcaFileName = (id: string, kind: OrcaKind = "player"): string => `earshot-${id}-${kind}.html`;
 
@@ -168,7 +168,7 @@ export const orcaLine = (file: string, title = "Listen"): string => `::orca-visu
 
 /** An earshot Orca line in a reply: the skill already ran. */
 /** -flow is the retired diagram page; replies that still carry its line count as narrated. */
-const ORCA_LINE = /^::orca-visual\{file="earshot-[A-Za-z0-9]+(?:-player|-explain|-flow)?\.html"/m;
+const ORCA_LINE = /^::orca-visual\{file="earshot-[A-Za-z0-9]+(?:-player|-explain[23]?|-flow)?\.html"/m;
 export const hasOrcaLine = (text: string): boolean => ORCA_LINE.test(text);
 
 export function writeOrcaPage(dir: string, id: string, html: string, kind: OrcaKind = "player"): string {

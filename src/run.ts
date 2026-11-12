@@ -160,8 +160,8 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
       opts.explain && !opts.noSketch && cfg.image.type !== "none"
         ? stage(stages, "explain", log, () => buildExplain(llm, clean(text))).then(
             (r) => {
-              if (r.html) writeFileInBundle(id, "explain.html", r.html);
-              else log(`explain: no image (${r.reason})`);
+              r.visuals.forEach((v, i) => writeFileInBundle(id, i === 0 ? "explain.html" : `explain${i + 1}.html`, v.html));
+              if (r.visuals.length === 0) log(`explain: no image (${r.reason})`);
             },
             (e) => void failures.push(`explain: ${errMsg(e)}`),
           )

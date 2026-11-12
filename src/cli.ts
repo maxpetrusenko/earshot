@@ -14,7 +14,8 @@ import { extractTagged } from "./extract/tagged.js";
 import { handleStop, type StopPayload } from "./hook/claude-code.js";
 import { handleNotify, parseNotifyArgv } from "./hook/codex.js";
 import { touchLock } from "./hook/state.js";
-import { install, InstallError, uninstall, type Mode, type Scope } from "./install/claude-code.js";
+import { claudeDir, install, InstallError, uninstall, type Mode, type Scope } from "./install/claude-code.js";
+import { installMod, uninstallMod } from "./install/claude-mod.js";
 import { ForeignNotifyError, installCodex, uninstallCodex } from "./install/codex.js";
 import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install/mcp.js";
 import { netFetch } from "./lib/net.js";
@@ -168,21 +169,26 @@ async function orcaOutput(orcaFlag: string | undefined, id: string, base: string
   const original = meta?.tracks?.original.status === "ready" ? readFileInBundle(id, "original.mp3") : null;
   try {
     const t = performance.now();
-    const explainHtml = readFileInBundle(id, "explain.html")?.toString("utf8") ?? null;
+    const explainPages = (["explain", "explain2", "explain3"] as const).flatMap((k) => {
+      const h = readFileInBundle(id, k === "explain" ? "explain.html" : `${k}.html`)?.toString("utf8");
+      return h ? [{ kind: k, html: h }] : [];
+    });
     const fit = await fitOrcaPage(edited, original, { editedSeconds: meta?.tracks?.edited.duration_s ?? undefined, originalSeconds: meta?.tracks?.original.duration_s ?? undefined });
     log(`orca encode ${Math.round(performance.now() - t)}ms`);
     const file = writeOrcaPage(dir, id, fit.html, "player");
-    // The explain page is its own display-only visual, and only a change worth a picture has one.
-    const explain = explainHtml ? writeOrcaPage(dir, id, explainHtml, "explain") : null;
-    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; explain ${explain ?? "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
-    if (explain && png) {
-      try {
-        log(`explain png ${await explainPng(explainHtml!, join(dir, explain.replace(/\.html$/, ".png")))}`);
-      } catch (e) {
-        log(`explain png failed: ${e instanceof Error ? e.message : String(e)}`);
+    // Each explain page is its own display-only visual with its own headline; only a change worth a picture has any.
+    const explains = explainPages.map((p) => ({ file: writeOrcaPage(dir, id, p.html, p.kind), html: p.html, title: /<h1>(.*?)<\/h1>/.exec(p.html)?.[1]?.replace(/&[a-z#0-9]+;/gi, " ").trim() || "Explain" }));
+    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; explain ${explains.map((x) => x.file).join(", ") || "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
+    if (png) {
+      for (const x of explains) {
+        try {
+          log(`explain png ${await explainPng(x.html, join(dir, x.file.replace(/\.html$/, ".png")))}`);
+        } catch (e) {
+          log(`explain png failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
       }
     }
-    return [orcaLine(file), ...(explain ? [orcaLine(explain, "Explain")] : []), listenMarkdown(links)].join("\n");
+    return [orcaLine(file), ...explains.map((x) => orcaLine(x.file, x.title)), listenMarkdown(links)].join("\n");
   } catch (e) {
     return fallback(e instanceof Error ? e.message : String(e));
   }
@@ -320,15 +326,17 @@ const clientOf = (v: string | undefined): McpClient => {
 
 program
   .command("install <agent>")
-  .description("install into an agent: claude-code (skill or Stop hook), codex (notify program), mcp (MCP server config)")
-  .option("--mode <mode>", "claude-code: skill or hook", "skill")
+  .description("install into an agent: claude-code (skill, Stop hook or Play button mod), codex (notify program), mcp (MCP server config)")
+  .option("--mode <mode>", "claude-code: skill, hook or mod (Play button buttons inside Claude Code)", "skill")
   .option("--scope <scope>", "claude-code: user (~/.claude) or project (./.claude); mcp with claude-code: local, project or user")
   .option("--client <client>", "mcp: claude-code, codex or generic")
   .option("--write", "mcp with codex: merge the table into config.toml instead of printing it")
   .option("--bin <cmd>", "how the skill, hook or MCP entry should invoke earshot")
   .action((agent: string, o: { mode: string; scope?: string; client?: string; write?: boolean; bin?: string }) => {
     try {
-      if (agent === "claude-code") {
+      if (agent === "claude-code" && o.mode === "mod") {
+        printResults(installMod(claudeDir(scopeOf(o.scope ?? "user"), process.cwd())));
+      } else if (agent === "claude-code") {
         printResults(install({ mode: modeOf(o.mode), scope: scopeOf(o.scope ?? "user"), bin: o.bin, log: err }));
       } else if (agent === "codex") {
         printResults(installCodex({ bin: o.bin }));
@@ -351,8 +359,10 @@ program
   .description("remove what `install` added")
   .option("--scope <scope>", "claude-code: user or project", "user")
   .option("--client <client>", "mcp: codex (the others are removed in the client)")
-  .action((agent: string, o: { scope: string; client?: string }) => {
-    if (agent === "claude-code") printResults(uninstall({ scope: scopeOf(o.scope) }));
+  .option("--mode <mode>", "claude-code: mod removes only the Play button mod; default removes the skill and hook")
+  .action((agent: string, o: { scope: string; client?: string; mode?: string }) => {
+    if (agent === "claude-code" && o.mode === "mod") printResults(uninstallMod(claudeDir(scopeOf(o.scope), process.cwd())));
+    else if (agent === "claude-code") printResults(uninstall({ scope: scopeOf(o.scope) }));
     else if (agent === "codex") printResults(uninstallCodex());
     else if (agent === "mcp") printResults(mcpUninstall({ client: clientOf(o.client) }));
     else throw new InstallError(`unknown target "${agent}"; supported: claude-code, codex, mcp`);

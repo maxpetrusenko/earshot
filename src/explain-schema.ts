@@ -6,11 +6,11 @@
 
 export class ExplainError extends Error {}
 
-export const EXPLAIN_TYPES = ["ui_before_after", "bug_before_after", "architecture", "timeline", "sequence", "example_io"] as const;
+export const EXPLAIN_TYPES = ["ui_before_after", "bug_before_after", "architecture", "timeline", "sequence", "example_io", "journey"] as const;
 export type ExplainType = (typeof EXPLAIN_TYPES)[number];
 
-export type ElKind = "bar" | "controls" | "button" | "link" | "text" | "bubble" | "image" | "row";
-export const EL_KINDS: readonly ElKind[] = ["bar", "controls", "button", "link", "text", "bubble", "image", "row"];
+export type ElKind = "bar" | "controls" | "button" | "link" | "text" | "bubble" | "wave" | "row";
+export const EL_KINDS: readonly ElKind[] = ["bar", "controls", "button", "link", "text", "bubble", "wave", "row"];
 export type State = "normal" | "good" | "bad" | "muted";
 const STATES: readonly State[] = ["normal", "good", "bad", "muted"];
 
@@ -20,8 +20,12 @@ export interface UiEl {
   state: State;
   /** Chat bubbles: which side of the frame. */
   side: "left" | "right";
-  /** Progress bars: 0 to 100, or -1 for none. */
+  /** Progress bars and waveforms: 0 to 100, or -1 for none. */
   value: number;
+  /** Draw a colored outline: this is what changed. */
+  hl: boolean;
+  /** An arrow annotation under the element saying what it is or does. */
+  note: string;
 }
 export interface UiPanel {
   kind: "ui";
@@ -29,6 +33,22 @@ export interface UiPanel {
   frame: "mac" | "phone" | "chat" | "plain";
   title: string;
   elements: UiEl[];
+  /** One sentence about the user impact of this panel. */
+  caption: string;
+}
+export interface JourneyStep {
+  label: string;
+  /** The real thing the user sees at this step, drawn as a small mockup. */
+  el: { kind: ElKind; text: string; value: number };
+  state: State;
+  /** Happens only sometimes (for example only for complex tasks). */
+  optional: boolean;
+}
+export interface JourneyPanel {
+  kind: "journey";
+  label: string;
+  steps: JourneyStep[];
+  caption: string;
 }
 export interface Segment {
   label: string;
@@ -40,19 +60,22 @@ export interface TimelinePanel {
   kind: "timeline";
   label: string;
   unit: string;
-  lanes: { label: string; segments: Segment[] }[];
+  lanes: { label: string; segments: Segment[]; marker: number; markerLabel: string }[];
+  caption: string;
 }
 export interface SequencePanel {
   kind: "sequence";
   label: string;
   actors: string[];
   messages: { from: number; to: number; text: string; dashed: boolean }[];
+  caption: string;
 }
 export interface ArchPanel {
   kind: "architecture";
   label: string;
   components: { id: string; label: string; state: State }[];
   edges: { from: string; to: string; label: string }[];
+  caption: string;
 }
 export interface IoPanel {
   kind: "io";
@@ -62,14 +85,17 @@ export interface IoPanel {
   transform: string;
   outLabel: string;
   output: string;
+  caption: string;
 }
-export type Panel = UiPanel | TimelinePanel | SequencePanel | ArchPanel | IoPanel;
+export type Panel = UiPanel | TimelinePanel | SequencePanel | ArchPanel | IoPanel | JourneyPanel;
 
 export interface Metric {
   label: string;
   before: string;
   after: string;
   verified: boolean;
+  /** Where a measured number came from, for example "measured on pro, 1.5 KB reply". */
+  source: string;
 }
 
 export interface ExplainSpec {
@@ -82,7 +108,7 @@ export interface ExplainSpec {
   assumptions: string[];
 }
 
-export const MAX = { panels: 2, elements: 8, lanes: 4, segments: 6, actors: 5, messages: 8, components: 7, edges: 9, callouts: 3, metrics: 3, assumptions: 4 };
+export const MAX = { panels: 2, elements: 8, lanes: 4, segments: 6, actors: 5, messages: 8, components: 7, edges: 9, callouts: 3, metrics: 3, assumptions: 4, steps: 5, visuals: 3 };
 
 const EMOJI = /[\p{Extended_Pictographic}\u200d\ufe0f]/gu;
 
@@ -114,9 +140,9 @@ function uiPanel(p: Record<string, unknown>): UiPanel {
     const kind = oneOf(r.kind, EL_KINDS, "text");
     const text = cleanText(r.text, r.kind === "controls" ? 80 : 60);
     if (!text) continue;
-    elements.push({ kind, text, state: oneOf(r.state, STATES, "normal"), side: oneOf(r.side, ["left", "right"] as const, "left"), value: num(r.value, 0, 100, -1) });
+    elements.push({ kind, text, state: oneOf(r.state, STATES, "normal"), side: oneOf(r.side, ["left", "right"] as const, "left"), value: num(r.value, 0, 100, -1), hl: r.highlight === true || r.hl === true, note: cleanText(r.note, 48) });
   }
-  return { kind: "ui", label: cleanText(p.label, 50), frame: oneOf(p.frame, ["mac", "phone", "chat", "plain"] as const, "plain"), title: cleanText(p.title, 30), elements };
+  return { kind: "ui", label: cleanText(p.label, 50), frame: oneOf(p.frame, ["mac", "phone", "chat", "plain"] as const, "plain"), title: cleanText(p.title, 30), elements, caption: cleanText(p.caption, 120) };
 }
 
 function timelinePanel(p: Record<string, unknown>): TimelinePanel {
@@ -131,9 +157,10 @@ function timelinePanel(p: Record<string, unknown>): TimelinePanel {
       segments.push({ label: cleanText(q.label, 24), start: num(q.start, 0, 100000, 0), duration, state: oneOf(q.state, STATES, "normal") });
     }
     const label = cleanText(r.label, 36);
-    if (label || segments.length) lanes.push({ label, segments });
+    const marker = num(r.marker, 0, 100000, -1);
+    if (label || segments.length) lanes.push({ label, segments, marker, markerLabel: cleanText(r.marker_label, 24) });
   }
-  return { kind: "timeline", label: cleanText(p.label, 50), unit: cleanText(p.unit, 4) || "s", lanes };
+  return { kind: "timeline", label: cleanText(p.label, 50), unit: cleanText(p.unit, 4) || "s", lanes, caption: cleanText(p.caption, 120) };
 }
 
 function sequencePanel(p: Record<string, unknown>): SequencePanel {
@@ -151,7 +178,7 @@ function sequencePanel(p: Record<string, unknown>): SequencePanel {
     const text = cleanText(r.text, 40);
     if (from >= 0 && to >= 0 && text) messages.push({ from, to, text, dashed: r.dashed === true });
   }
-  return { kind: "sequence", label: cleanText(p.label, 50), actors, messages };
+  return { kind: "sequence", label: cleanText(p.label, 50), actors, messages, caption: cleanText(p.caption, 120) };
 }
 
 function archPanel(p: Record<string, unknown>): ArchPanel {
@@ -176,7 +203,7 @@ function archPanel(p: Record<string, unknown>): ArchPanel {
     const to = find(r.to);
     if (from && to && from !== to) edges.push({ from, to, label: cleanText(r.label, 22) });
   }
-  return { kind: "architecture", label: cleanText(p.label, 50), components, edges };
+  return { kind: "architecture", label: cleanText(p.label, 50), components, edges, caption: cleanText(p.caption, 120) };
 }
 
 function ioPanel(p: Record<string, unknown>): IoPanel {
@@ -188,7 +215,21 @@ function ioPanel(p: Record<string, unknown>): IoPanel {
     transform: cleanText(p.transform, 100),
     outLabel: cleanText(p.output_label, 16) || "Output",
     output: cleanText(p.output, 140),
+    caption: cleanText(p.caption, 120),
   };
+}
+
+function journeyPanel(p: Record<string, unknown>): JourneyPanel {
+  const steps: JourneyStep[] = [];
+  for (const s of arr(p.steps).slice(0, MAX.steps)) {
+    const r = rec(s);
+    const e = rec(r.el);
+    const label = cleanText(r.label, 28);
+    const text = cleanText(e.text, 40);
+    if (!label || !text) continue;
+    steps.push({ label, el: { kind: oneOf(e.kind, EL_KINDS, "text"), text, value: num(e.value, 0, 100, -1) }, state: oneOf(r.state, STATES, "normal"), optional: r.optional === true });
+  }
+  return { kind: "journey", label: cleanText(p.label, 50), steps, caption: cleanText(p.caption, 120) };
 }
 
 const BUILD: Record<ExplainType, (p: Record<string, unknown>) => Panel> = {
@@ -198,6 +239,7 @@ const BUILD: Record<ExplainType, (p: Record<string, unknown>) => Panel> = {
   sequence: sequencePanel,
   architecture: archPanel,
   example_io: ioPanel,
+  journey: journeyPanel,
 };
 
 /** True for the text NO_IMAGE or a JSON object whose no_image is true. */
@@ -221,7 +263,7 @@ export function parseExplain(raw: unknown): ExplainSpec | null {
     const r = rec(m);
     const label = cleanText(r.label, 40);
     const after = cleanText(r.after, 20);
-    if (label && after) metrics.push({ label, before: cleanText(r.before, 20), after, verified: r.verified === true });
+    if (label && after) metrics.push({ label, before: cleanText(r.before, 20), after, verified: r.verified === true, source: r.verified === true ? cleanText(r.source, 48) : "" });
   }
   const title = cleanText(o.title, 60);
   if (!title) throw new ExplainError('"title" is missing');
@@ -234,4 +276,16 @@ export function parseExplain(raw: unknown): ExplainSpec | null {
     metrics,
     assumptions: arr(o.assumptions).slice(0, MAX.assumptions).map((c) => cleanText(c, 120)).filter(Boolean),
   };
+}
+
+/**
+ * Validate the model's whole answer: NO_IMAGE, one visual object, or {"visuals":[...]} with up to three.
+ * Each visual is validated alone; one unusable visual throws so the model can fix it.
+ */
+export function parseExplainAll(raw: unknown): ExplainSpec[] {
+  if (typeof raw === "string" && isNoImage(raw)) return [];
+  const o = rec(raw);
+  if (o.no_image === true && !Array.isArray(o.visuals)) return [];
+  const items = Array.isArray(o.visuals) ? o.visuals.slice(0, MAX.visuals) : [raw];
+  return items.map((v) => parseExplain(v)).filter((s): s is ExplainSpec => s !== null);
 }

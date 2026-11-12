@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Claude Code Play button mod (`integrations/claude-code/mod/earshot-player/`): hides the Listen line and draws Play and Original buttons under the reply. Accepts `[Listen](url)`, `[Listen original](url)` and `[Original](url)`, case-insensitive; no-op on the `mobile` surface. `earshot install claude-code --mode mod` copies it to `<claude dir>/skills/earshot-player/` (auto-loaded by Claude Code); `uninstall --mode mod` removes it. The buttons draw only inside Claude Code's own UI, not in Orca or the phone app.
 - Orca inline player rewritten on the Web Audio API (`decodeAudioData` plus `AudioBufferSourceNode`). The old `<audio src="data:...">` page failed in Orca with `NotSupportedError`. The player page is a compact bar: Play/Pause, Original, a seek bar, back and forward 10 s, speed (1x, 1.25x, 1.5x, 2x), elapsed / total, and Space to toggle.
 - `--format auto`: inside Orca (`ORCA_CHAT_SCRATCH_DIR` writable) the skill prints the `::orca-visual` line and then the markdown links; elsewhere it prints the links at once. The Claude Code skill now uses it.
 - Orca output is now two independent visuals, player first: `earshot-<id>-player.html` (control bar only, no image) and `earshot-<id>-explain.html` (visual explanation only), then the Listen / Original line last. The player detects iOS and iPadOS at run time and collapses to nothing there, since iOS cannot tap an inline visual. The Mac cannot hide the markdown links (the text is the same on both devices); see docs/orca.md.

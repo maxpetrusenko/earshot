@@ -79,3 +79,18 @@ Real transcripts hold one JSONL entry per content block (thinking, tool_use and 
 ## Detach and queue
 
 The hook writes the pending brief (scrubbed `input.txt`, `meta.json`, pending card) itself, then starts `earshot worker <id>` with `detached: true`, stdio on `~/.earshot/logs/<id>.log`, and `unref()`. It prints the link and exits. Newest wins per session: a still-pending older brief for the same session becomes `failed` with `error: superseded` and its worker gets SIGTERM (only after a `ps` check that the pid is an earshot worker).
+
+## Play button mod
+
+Optional. A Claude Code mod that hides the `[Listen](...) · [Listen original](...)` line (a lone `[Original](...)` is accepted too; labels match case-insensitively) and draws Play and Original buttons under the reply. One clip plays at a time and a second press stops it. Source: `integrations/claude-code/mod/earshot-player/`.
+
+```
+earshot install claude-code --mode mod      # copies four files to <claude dir>/skills/earshot-player/
+earshot uninstall claude-code --mode mod    # removes them (and the folder when empty)
+```
+
+Mechanism: Claude Code 2.1.x auto-loads any plugin folder under `~/.claude/skills/<name>/` (it shows as `earshot-player@skills-dir`), the same place `claude plugin init` scaffolds. Start a new session, or run `/reload-plugins`, to pick it up. The install follows `CLAUDE_CONFIG_DIR`, is idempotent, backs up a changed file as `<file>.earshot-bak-<time>`, and refuses to touch a folder of that name that it did not create. The default modes (skill, hook) are unchanged; the mod needs the skill to produce the Listen line.
+
+Where the buttons draw: only inside Claude Code's own UI (terminal, desktop and vscode surfaces). They do not appear in Orca or in the phone app. On the `mobile` surface the mod does nothing and the reply's own links are left as they are.
+
+Tests: `claude plugin test integrations/claude-code/mod/earshot-player` (not part of `pnpm test`; the mod has its own runner).
