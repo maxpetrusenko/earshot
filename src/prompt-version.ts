@@ -1,8 +1,8 @@
 export type ScriptStyle = "short" | "story" | "brief";
 
-/** Prompt file and version label per style. short is prompt v2 (the default), story is v1, brief is the original v0. */
+/** Prompt file and version label per style. short is prompt v3 (the default), story is v1, brief is the original v0. */
 export const PROMPTS: Record<ScriptStyle, { file: string; version: string }> = {
-  short: { file: "ear-script.v2.txt", version: "ear-script.v2" },
+  short: { file: "ear-script.v3.txt", version: "ear-script.v3" },
   story: { file: "ear-script.v1.txt", version: "ear-script.v1" },
   brief: { file: "ear-script.v0.txt", version: "ear-script.v0" },
 };

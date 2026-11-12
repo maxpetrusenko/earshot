@@ -5,6 +5,7 @@ import { DEFAULT_STYLE, PROMPTS, SHORT_MAX_WORDS, type ScriptStyle } from "./pro
 import { redact } from "./redact.js";
 import { Chunker, SentenceSplitter, spellDigits, type QuoteState } from "./speech.js";
 import { JsonFieldStream } from "./stream-json.js";
+import { parseFlowSpec, type FlowSpec } from "./sketch.js";
 
 /** Fewer words than this is not a memo. Outside MIN_WORDS..MAX_STREAM_WORDS only a warning is kept. */
 export const MIN_STREAM_WORDS = 30;
@@ -15,6 +16,8 @@ export interface StreamedEar {
   /** The spoken script: digits spelled out (outside quotes), secrets scrubbed. */
   script: string;
   mermaid: string;
+  /** The structured flow for a multi-part task, or null when the reply gets no picture. */
+  flow: FlowSpec | null;
   evidence: string | null;
   words: number;
   warnings: string[];
@@ -28,6 +31,8 @@ export interface StreamHooks {
   onTitle?: (title: string) => void;
   /** The diagram source, as soon as the model finishes it. Must not block; the stream keeps flowing. */
   onMermaid?: (mermaid: string) => void;
+  /** The structured flow, as soon as the model finishes it. Not called for "sketch": "none". */
+  onFlow?: (flow: FlowSpec) => void;
 }
 
 export interface StreamOptions {
@@ -59,6 +64,11 @@ export async function streamEarScript(llm: LlmProvider, input: string, hooks: St
   const spoken: string[] = [];
   let title = "";
   let mermaid = "";
+  let flow: FlowSpec | null = null;
+  const gotFlow = (raw: string) => {
+    flow = parseFlowSpec(raw);
+    if (flow) hooks.onFlow?.(flow);
+  };
   let evidenceRaw = "";
   let words = 0;
 
@@ -93,6 +103,10 @@ export async function streamEarScript(llm: LlmProvider, input: string, hooks: St
         mermaid = value.trim();
         if (mermaid) hooks.onMermaid?.(mermaid);
       } else if (key === "evidence") evidenceRaw = value;
+      else if (key === "sketch") gotFlow(value); // "none" parses to null
+    },
+    other: (key, json) => {
+      if (key === "sketch") gotFlow(json);
     },
   });
 
@@ -124,6 +138,7 @@ export async function streamEarScript(llm: LlmProvider, input: string, hooks: St
     title: titleLeak ? "" : title,
     script,
     mermaid,
+    flow,
     evidence: validEvidence(evidenceRaw, input, o.evidenceHosts ?? []),
     words: n,
     warnings,

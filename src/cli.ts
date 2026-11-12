@@ -19,7 +19,8 @@ import { ForeignNotifyError, installCodex, uninstallCodex } from "./install/code
 import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install/mcp.js";
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
-import { fitOrcaPage, orcaDir, orcaLine, writeOrcaPage } from "./orca.js";
+import { flowToMermaid } from "./sketch.js";
+import { fitOrcaPage, orcaDir, orcaLine, renderFlowHtml, writeOrcaPage } from "./orca.js";
 import { readFileInBundle, readMeta } from "./bundle.js";
 import { flushTracing } from "./lib/llm-tracing.js";
 import { dryRun, executeBrief, loadPrepared, NothingUsableError } from "./run.js";
@@ -118,7 +119,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   const llm = createLlm(cfg.llm);
   if (flags.dryRun) {
     const ear = await dryRun(cfg, llm, input.text, log);
-    process.stdout.write(`${ear.title}\n\n${ear.script}\n\n${ear.mermaid}\n`);
+    process.stdout.write(`${ear.title}\n\n${ear.script}\n\n${ear.flow ? flowToMermaid(ear.flow).mermaid : ear.mermaid || "sketch: none"}\n`);
     log(`${ear.words} words, ${ear.retries} retries`);
     return 0;
   }
@@ -166,11 +167,13 @@ async function orcaOutput(orcaFlag: string | undefined, id: string, base: string
   try {
     const t = performance.now();
     const svg = readFileInBundle(id, "sketch.svg")?.toString("utf8");
-    const fit = await fitOrcaPage(edited, original, { editedSeconds: meta?.tracks?.edited.duration_s ?? undefined, originalSeconds: meta?.tracks?.original.duration_s ?? undefined, title: meta?.title, svg });
+    const fit = await fitOrcaPage(edited, original, { editedSeconds: meta?.tracks?.edited.duration_s ?? undefined, originalSeconds: meta?.tracks?.original.duration_s ?? undefined });
     log(`orca encode ${Math.round(performance.now() - t)}ms`);
-    const file = writeOrcaPage(dir, id, fit.html);
-    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; ${Math.round(performance.now() - runStart)}ms from start to line`);
-    return `${orcaLine(file)}\n${listenMarkdown(links)}`;
+    const file = writeOrcaPage(dir, id, fit.html, "player");
+    // The diagram is its own page, and only a multi-part task has one.
+    const flow = svg?.includes("<svg") ? writeOrcaPage(dir, id, renderFlowHtml({ title: meta?.title, svg }), "flow") : null;
+    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; flow ${flow ?? "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
+    return [orcaLine(file), ...(flow ? [orcaLine(flow, "Flow")] : []), listenMarkdown(links)].join("\n");
   } catch (e) {
     return fallback(e instanceof Error ? e.message : String(e));
   }

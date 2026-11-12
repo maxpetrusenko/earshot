@@ -2,15 +2,13 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { chromium, webkit, type BrowserType, type Page } from "playwright";
+import { chromium, devices, webkit, type Browser, type BrowserType, type Page } from "playwright";
 import { describe, expect, it } from "vitest";
 import { fitOrcaPage } from "../src/orca.js";
 
 const haveFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 const tone = (hz: number, seconds: number): Buffer =>
   spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", `sine=frequency=${hz}:duration=${seconds}`, "-ac", "1", "-ar", "24000", "-b:a", "64k", "-f", "mp3", "pipe:1"], { maxBuffer: 1 << 24 }).stdout;
-
-const SVG = '<svg viewBox="0 0 100 40"><rect x="2" y="2" width="30" height="20" fill="#1f6f5c"/><text x="40" y="20">ok</text></svg>';
 
 /** Seek position in seconds, read from the progress bar (1000 steps over the track). */
 const pos = (page: Page) => page.evaluate(() => (Number((document.getElementById("sk") as HTMLInputElement).value) / 1000) * 20);
@@ -19,7 +17,7 @@ const engines: [string, BrowserType][] = [["webkit", webkit], ["chromium", chrom
 
 describe.skipIf(!haveFfmpeg).each(engines)("generated Orca page in headless %s", (_name, type) => {
   it("plays through Web Audio and every control works", async () => {
-    const f = await fitOrcaPage(tone(440, 20), tone(660, 20), { title: "Fixed the retries", svg: SVG });
+    const f = await fitOrcaPage(tone(440, 20), tone(660, 20), {});
     const dir = mkdtempSync(join(tmpdir(), "orca-br-"));
     const file = join(dir, "page.html");
     writeFileSync(file, f.html);
@@ -133,4 +131,64 @@ describe.skipIf(!haveFfmpeg).each(engines)("generated Orca page in headless %s",
       rmSync(dir, { recursive: true, force: true });
     }
   }, 90000);
+});
+
+describe.skipIf(!haveFfmpeg)("player page device handling in headless WebKit", () => {
+  const load = async (opts: Parameters<Browser["newContext"]>[0], init?: () => void) => {
+    const f = await fitOrcaPage(tone(440, 5), tone(660, 5));
+    const dir = mkdtempSync(join(tmpdir(), "orca-ios-"));
+    const file = join(dir, "player.html");
+    writeFileSync(file, f.html);
+    const browser = await webkit.launch().catch(() => null);
+    if (!browser) return null;
+    const ctx = await browser.newContext(opts);
+    if (init) await ctx.addInitScript(init);
+    const page = await ctx.newPage();
+    await page.goto(`file://${file}`);
+    return { page, browser, dir };
+  };
+  const height = (page: Page) => page.evaluate(() => Math.round(Math.max(document.documentElement.getBoundingClientRect().height, document.body.getBoundingClientRect().height, document.body.scrollHeight)));
+
+  it("desktop: the player renders and works", async () => {
+    const r = await load({});
+    if (!r) return;
+    try {
+      expect(await r.page.evaluate(() => document.documentElement.className)).not.toBe("ios");
+      await r.page.waitForFunction(() => document.getElementById("tm")!.textContent!.endsWith("/ 0:05"), null, { timeout: 15000 });
+      expect(await r.page.isVisible("#be")).toBe(true);
+      expect(await height(r.page)).toBeGreaterThan(40);
+    } finally {
+      await r.browser.close();
+      rmSync(r.dir, { recursive: true, force: true });
+    }
+  }, 60000);
+
+  it("iPhone profile: renders nothing and collapses to zero height", async () => {
+    const r = await load({ ...devices["iPhone 13"] });
+    if (!r) return;
+    try {
+      expect(await r.page.evaluate(() => navigator.userAgent)).toMatch(/iPhone/);
+      expect(await r.page.evaluate(() => document.documentElement.className)).toBe("ios");
+      expect(await r.page.isVisible("#be")).toBe(false);
+      expect(await height(r.page)).toBe(0);
+      expect(await r.page.evaluate(() => document.getElementById("tm")!.textContent)).toBe("0:00 / 0:00"); // audio never decoded
+    } finally {
+      await r.browser.close();
+      rmSync(r.dir, { recursive: true, force: true });
+    }
+  }, 60000);
+
+  it("iPad reporting a Mac user agent with touch points also collapses", async () => {
+    const r = await load({ userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15" }, () => {
+      Object.defineProperty(navigator, "maxTouchPoints", { get: () => 5 });
+    });
+    if (!r) return;
+    try {
+      expect(await r.page.evaluate(() => document.documentElement.className)).toBe("ios");
+      expect(await height(r.page)).toBe(0);
+    } finally {
+      await r.browser.close();
+      rmSync(r.dir, { recursive: true, force: true });
+    }
+  }, 60000);
 });

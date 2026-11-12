@@ -5,7 +5,7 @@ import { chunkText, speakableOriginal } from "./speech.js";
 import { Semaphore, TrackWriter } from "./track.js";
 import type { Config } from "./config.js";
 import { beginRun, endRun } from "./lib/llm-tracing.js";
-import { buildSketch } from "./sketch.js";
+import { buildSketch, renderFlow, type FlowSpec } from "./sketch.js";
 import type { LlmProvider } from "./llm.js";
 import { redact } from "./redact.js";
 import { prepareBrief, scrub, type Prepared } from "./prepare.js";
@@ -174,6 +174,18 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
       );
     };
 
+    const startFlow = (flow: FlowSpec) => {
+      if (opts.noSketch || cfg.image.type === "none") return;
+      sketchJob = stage(stages, "sketch", log, () => renderFlow(flow)).then(
+        (r) => {
+          writeFileInBundle(id, "sketch.svg", r.svg);
+          meta.image = { renderer: cfg.image.renderer, mermaid: r.mermaid };
+          updateMeta(id, (m) => void (m.image = meta.image));
+        },
+        (e) => void failures.push(`sketch: ${errMsg(e)}`),
+      );
+    };
+
     let ear: StreamedEar | null = null;
     try {
       ear = await stage(
@@ -191,6 +203,7 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
                 updateMeta(id, (m) => void (m.title = clean(t)));
               },
               onMermaid: startSketch,
+              onFlow: startFlow,
             },
             { evidenceHosts: cfg.privacy.evidence_hosts, style: cfg.script.style, redact: cfg.privacy.redact, log },
           ),

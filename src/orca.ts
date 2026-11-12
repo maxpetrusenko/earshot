@@ -31,10 +31,6 @@ export interface PageInput {
   edited: string;
   /** Base64 MP3 of the original; null when it was dropped to fit the budget. */
   original: string | null;
-  /** The memo title, one line. Escaped. */
-  title?: string;
-  /** The memo sketch. Run through the SVG sanitizer here. */
-  svg?: string;
   /** Initial status text, e.g. why the original is missing. Escaped. */
   note?: string;
 }
@@ -42,10 +38,8 @@ export interface PageInput {
 export const b64 = (b: Buffer): string => b.toString("base64");
 
 const PAGE_CSS = `body{margin:0;font-family:var(--font-sans,system-ui);background:var(--background,#fff);color:var(--foreground,#171717)}
-.ti{padding:10px 12px 4px;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sk{padding:4px 12px;text-align:center}
-.sk svg{max-height:220px;max-width:100%;width:auto;height:auto}
-.bar{padding:8px 12px 10px;display:flex;flex-direction:column;gap:6px}
+html.ios,html.ios body{display:none;height:0;margin:0;padding:0;overflow:hidden}
+.bar{padding:6px 12px 8px;display:flex;flex-direction:column;gap:6px}
 #sk{width:100%;margin:0;height:4px;accent-color:var(--primary,#1f6f5c);cursor:pointer}
 .ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 button{font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--border,#ddd);background:var(--secondary,#f4f4f4);color:var(--secondary-foreground,#171717);cursor:pointer}
@@ -55,10 +49,16 @@ button.on{background:var(--primary,#1f6f5c);color:var(--primary-foreground,#fff)
 #st{font-size:13px;color:var(--destructive,#b42318)}#st:empty{display:none}`;
 
 /**
+ * iOS and iPadOS cannot tap an Orca visual, so the player renders nothing there and collapses to zero height.
+ * iPadOS reports a Mac user agent, so a Mac with touch points counts as an iPad. Runs before the body is parsed.
+ */
+export const IOS_DETECT = `(function(){var n=navigator,u=n.userAgent||'';if(/iPhone|iPad|iPod/.test(u)||(/Macintosh|MacIntel/.test(u+(n.platform||''))&&n.maxTouchPoints>1))document.documentElement.className='ios'})();`;
+
+/**
  * Player script. Web Audio only: Orca's CSP blocks media data: URLs, so an audio element cannot play the embedded MP3.
  * Position is offset + (context time - start time) * rate; every seek, skip or speed change stops the source and restarts it.
  */
-const PAGE_JS = `const A=__AUDIO__;
+const PAGE_JS = `if(document.documentElement.className!=='ios'){const A=__AUDIO__;
 const $=id=>document.getElementById(id);
 const be=$('be'),bo=$('bo'),bs=$('sk'),tm=$('tm'),st=$('st'),bb=$('bk'),bf=$('fw'),sp=$('sp');
 const names={e:'Play',o:'Original'},btn={e:be,o:bo},rates=[1,1.25,1.5,2];
@@ -84,29 +84,44 @@ sp.onclick=act(()=>{const p=pos(),was=!!src;halt();off[cur]=p;ri=(ri+1)%rates.le
 bs.oninput=()=>{drag=true;ui()};
 bs.onchange=act(()=>{drag=false;seek(bs.value/1000*dur())});
 document.addEventListener('keydown',e=>{if(e.code!=='Space'||e.target.tagName==='BUTTON')return;e.preventDefault();act(()=>play(cur))()});
-setInterval(()=>{if(buf.e&&src)ui()},100);`;
+setInterval(()=>{if(buf.e&&src)ui()},100)}`;
 
 /**
- * One self-contained page for Orca's inline visual: the memo's sketch and title on top, a compact control bar at the bottom.
+ * The player page: a compact control bar and nothing else, no title and no image. On iOS it collapses to zero height.
  * Theme tokens are read with fallbacks and never redefined; there is no network access and no 100vh.
  */
-export function renderOrcaHtml(p: PageInput): string {
+export function renderPlayerHtml(p: PageInput): string {
   const orig = p.original !== null;
   const audio = `{e:"${p.edited}"${orig ? `,o:"${p.original}"` : ""}}`;
-  const svg = p.svg ? sanitizeSvg(p.svg) : "";
-  const title = p.title ? `<div class="ti">${escapeHtml(p.title)}</div>` : "";
-  const sketch = svg.includes("<svg") ? `<div class="sk">${svg}</div>` : "";
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>${IOS_DETECT}</script>
 <style>
 ${PAGE_CSS}
 </style></head><body tabindex="0">
-${title}${sketch}
 <div class="bar"><input id="sk" type="range" min="0" max="1000" value="0" aria-label="Seek">
 <div class="ctl"><button class="sel" id="be">Play</button>${orig ? '<button id="bo">Original</button>' : ""}<button id="bk" aria-label="Back 10 seconds">-10</button><button id="fw" aria-label="Forward 10 seconds">+10</button><button id="sp" aria-label="Speed">1x</button><span id="tm">0:00 / 0:00</span></div>
 <div id="st">${p.note ? escapeHtml(p.note) : ""}</div></div>
 <script>
 ${PAGE_JS.replace("__AUDIO__", () => audio)}
 </script></body></html>
+`;
+}
+
+const FLOW_CSS = `body{margin:0;font-family:var(--font-sans,system-ui);background:var(--background,#fff);color:var(--foreground,#171717)}
+.ti{padding:10px 12px 4px;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sk{padding:4px 12px 10px;text-align:center}
+.sk svg{max-height:420px;max-width:100%;width:auto;height:auto}`;
+
+/** The flow page: the memo title over the diagram. No audio, no script. */
+export function renderFlowHtml(p: { title?: string; svg: string }): string {
+  const svg = sanitizeSvg(p.svg);
+  const title = p.title ? `<div class="ti">${escapeHtml(p.title)}</div>` : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+${FLOW_CSS}
+</style></head><body>
+${title}<div class="sk">${svg}</div>
+</body></html>
 `;
 }
 
@@ -117,7 +132,7 @@ export interface Fitted {
   droppedOriginal: boolean;
 }
 
-/** Page bytes for audio of this length at this bitrate: CBR size, base64 growth, the markup and the sketch. */
+/** Page bytes for audio of this length at this bitrate: CBR size, base64 growth and the markup. */
 export const predictPageBytes = (seconds: number, kbps: number, extra = 0): number => Math.ceil((seconds * kbps * 125 * 4) / 3) + 7000 + extra;
 
 export interface FitOptions {
@@ -125,8 +140,6 @@ export interface FitOptions {
   reencode?: Reencode;
   editedSeconds?: number;
   originalSeconds?: number;
-  title?: string;
-  svg?: string;
 }
 
 /**
@@ -137,18 +150,17 @@ export async function fitOrcaPage(edited: Buffer, original: Buffer | null, opts:
   const budget = opts.budget ?? ORCA_BUDGET_BYTES;
   const enc = opts.reencode ?? ffmpegReencode;
   const size = (html: string) => Buffer.byteLength(html);
-  const meta = { ...(opts.title ? { title: opts.title } : {}), ...(opts.svg ? { svg: opts.svg } : {}) };
   const total = (opts.editedSeconds ?? 0) + (original ? (opts.originalSeconds ?? 0) : 0);
-  const start = total > 0 ? Math.max(0, ORCA_BITRATES.findIndex((k) => predictPageBytes(total, k, Buffer.byteLength(opts.svg ?? "")) <= budget)) : 0;
+  const start = total > 0 ? Math.max(0, ORCA_BITRATES.findIndex((k) => predictPageBytes(total, k) <= budget)) : 0;
   let last: { kbps: number; e: Buffer } | null = null;
   for (const kbps of ORCA_BITRATES.slice(start)) {
     const [e, o] = await Promise.all([enc(edited, kbps), original ? enc(original, kbps) : Promise.resolve(null)]);
     last = { kbps, e };
-    const html = renderOrcaHtml({ ...meta, edited: b64(e), original: o ? b64(o) : null, ...(original ? {} : { note: "The original track is not available." }) });
+    const html = renderPlayerHtml({ edited: b64(e), original: o ? b64(o) : null, ...(original ? {} : { note: "The original track is not available." }) });
     if (size(html) <= budget) return { html, bytes: size(html), kbps, droppedOriginal: original === null };
   }
   const { kbps, e } = last!;
-  const html = renderOrcaHtml({ ...meta, edited: b64(e), original: null, note: "The original track did not fit in this player." });
+  const html = renderPlayerHtml({ edited: b64(e), original: null, note: "The original track did not fit in this player." });
   if (size(html) > budget) throw new Error(`the edited track alone is ${size(html)} bytes at ${kbps}k, over the ${budget} byte budget`);
   return { html, bytes: size(html), kbps, droppedOriginal: true };
 }
@@ -166,17 +178,19 @@ export function orcaDir(flag?: string, env: NodeJS.ProcessEnv = process.env): st
   }
 }
 
-export const orcaFileName = (id: string): string => `earshot-${id}.html`;
+export type OrcaKind = "player" | "flow";
 
-/** The chat line Orca turns into an inline page (Mac). The markdown Listen line goes after it, for the phone. */
+export const orcaFileName = (id: string, kind: OrcaKind = "player"): string => `earshot-${id}-${kind}.html`;
+
+/** The chat line Orca turns into an inline page (Mac). */
 export const orcaLine = (file: string, title = "Listen"): string => `::orca-visual{file="${file}" title="${title}"}`;
 
 /** An earshot Orca line in a reply: the skill already ran. */
-const ORCA_LINE = /^::orca-visual\{file="earshot-[A-Za-z0-9]+\.html"/m;
+const ORCA_LINE = /^::orca-visual\{file="earshot-[A-Za-z0-9]+(?:-player|-flow)?\.html"/m;
 export const hasOrcaLine = (text: string): boolean => ORCA_LINE.test(text);
 
-export function writeOrcaPage(dir: string, id: string, html: string): string {
-  const file = orcaFileName(id);
+export function writeOrcaPage(dir: string, id: string, html: string, kind: OrcaKind = "player"): string {
+  const file = orcaFileName(id, kind);
   writeFileSync(join(dir, file), html, { mode: 0o600 });
   return file;
 }
