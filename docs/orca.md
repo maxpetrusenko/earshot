@@ -2,10 +2,10 @@
 
 Read when: you run Claude Code inside Orca and want to tap Play in the chat instead of opening a link.
 
-Orca's native chat renders an HTML page inline when a reply has `::orca-visual{file="<name>.html" title="..."}` on its own line, with the file in `$ORCA_CHAT_SCRATCH_DIR`. earshot writes up to two pages and prints their lines in this order:
+Orca's native chat renders an HTML page inline when a reply has `::orca-visual{file="<name>.html" title="..."}` on its own line, with the file in `$ORCA_CHAT_SCRATCH_DIR`. earshot writes the player page plus up to three explain pages, each with its own headline, and prints their lines in this order:
 
 1. `earshot-<id>-player.html`: a compact control bar and nothing else, no image. Play and Original (one track at a time, resume from the paused offset), a seek bar, back and forward 10 s, a speed button cycling 1x, 1.25x, 1.5x and 2x, and elapsed / total time. Space toggles play and pause when the frame has focus. Errors show in the status line under the bar.
-2. `earshot-<id>-flow.html`: the diagram, only for a bigger task (see Flow below).
+2. `earshot-<id>-explain.html`, `-explain2.html`, `-explain3.html`: one page per concept, only for the concepts worth a picture (see Explain below). Display-only, and they show on iPhone. The line's title is the page's own headline.
 3. `[Listen](...) · [Original](...)`, always the last line.
 
 ## Devices
@@ -19,15 +19,25 @@ The reply text is the same on Orca Mac and Orca iOS, and iOS cannot tap an inlin
 
 Limit: the Listen and Original links cannot be hidden on the Mac. The markdown is identical on both devices, and Orca's own visual skill (`orca-chat-visuals`) documents only `::orca-visual{file title}` with no device-conditional content, so there is nothing to key off. earshot keeps the links, makes them the last line, and keeps them to one short line. The collapse is tested in headless WebKit with an iPhone device profile (frame height 0), and the same page keeps its full height in desktop WebKit and Chromium.
 
-## Flow
+## Explain
 
-Small replies get no image: a status update, a short answer, a test run, one fix in one place. The ear-script call (prompt `ear-script.v3`) returns `"sketch": "none"` for those. For a task that touched three or more connected parts it returns a structure instead:
+The pages are explanations of what changed, not a chain of boxes: a real interface before and after, a latency timeline, a journey the user actually takes. One LLM call (stage `explain`) takes the reply text, redacted when `privacy.redact` is on, and returns structured JSON only, either one visual or `{"visuals":[...]}` with up to three concepts. The system prompt is `prompts/visual-explainer.v2.txt` verbatim plus `prompts/visual-explainer-format.v2.txt`, which replaces its output list with the schema. The call starts at the beginning of the pipeline, next to the script and the speech, so it never delays audio; a failure is recorded as a non-fatal `explain:` failure.
 
-```json
-{"nodes": [{"id": "a", "label": "Webhook"}, ...], "edges": [["a", "b"], ...], "broken": "b", "fixed": "c"}
-```
+The model picks a type and fills panels for it:
 
-earshot validates it (3 to 7 nodes, labels cut to plain words, edges between known nodes, otherwise no image), builds the Mermaid itself, renders it top-down with the existing renderer, and restyles the two marked nodes: the broken one gets a red border and fill and the word "broke", the fixed one a green border and fill and "fixed". The output goes through the same SVG sanitizer as before. `pnpm tsx scripts/sketch-hitrate.ts` runs the live model over the fixtures in `test/fixtures/outputs` and `test/fixtures/sketch` and prints the none-versus-flow hit rate.
+| Type | Panels |
+|---|---|
+| `ui_before_after`, `bug_before_after` | two panels of interface elements (bar, controls, button, link, bubble, wave, row, text) in a Mac window, phone, chat or plain frame |
+| `timeline` | lanes of segments with start and duration, on one shared scale across the panels |
+| `sequence` | actors and messages |
+| `architecture` | components and labeled data paths |
+| `journey` | three to five steps, each showing the real thing the user sees |
+
+Every panel carries a caption about what the user can now do, and an element that changed is outlined with a short arrow note. The spec also carries a title, a takeaway, up to three callouts and metrics. A metric with `verified: true` is shown as measured, with the source it names; an unverified one is shown with the word "target". `{"no_image": true}` (or the text `NO_IMAGE`) means no page: a status update, a short answer, a test run.
+
+Code validates the JSON strictly (unknown fields dropped, strings capped and stripped of emoji and long dashes, counts capped), then a quality gate checks every visual on its own: a before/after type needs two panels, each with at least three real interface elements and a caption; a timeline needs at least two segments per panel; a sequence needs two actors and two messages; an architecture needs three components and labeled data paths; a journey needs three steps with something drawn in each; a bare "Fixed", "Implemented", "Completed" or "Merged" label is rejected, as is a box that says "Diagram". The whole picture must also reach 0.55 visual density, so a page of sentences, or a mostly empty one, is rejected. On a miss the model is asked once more with the gate's feedback; visuals that pass ship, and a second miss counts as no image. Fixed HTML and SVG templates draw the pages (the model never writes markup), every value is escaped and the SVG goes through the allowlist sanitizer. The pages are light, use a local font stack, read Orca theme tokens with fallbacks, never redefine one, stack the panels below 760 px and sit side by side above it. Only the player collapses on iOS; the explain pages do not.
+
+`--explain-png` also writes one PNG per explain page (`earshot-<id>-explain.png`, `-explain2.png`, `-explain3.png`), 1080 px wide at 2x and full page height, through Playwright, which must be installed with a Chromium. `--no-explain` or `--no-sketch` skips the stage, and `image.type: none` disables it in config. `pnpm tsx scripts/explain-demo.ts [--shots]` runs the live model over `test/fixtures/explain/*.json`; `pnpm tsx scripts/explain-preview.ts <spec.json> [out.html] [--shots]` renders a saved or hand-written answer without an LLM and prints each visual's density and gate result; `pnpm tsx scripts/explain-score.ts <png|dir>` scores screenshots with Opus (`--json` for machine output).
 
 ## Why Web Audio
 
@@ -45,7 +55,7 @@ The Stop hook treats either line as already narrated.
 
 ## Page size
 
-The player page embeds both tracks, re-encoded with ffmpeg to mono, 22.05 kHz MP3. earshot predicts the size from the track durations, picks 24k, 20k or 16k, and encodes once. Budget is 480 KB (Orca's limit is 512 KB). If 16k still does not fit, the original track is dropped and the page says so. The files are `earshot-<brief id>-player.html` and `earshot-<brief id>-flow.html`; each page needs a new file name.
+The player page embeds both tracks, re-encoded with ffmpeg to mono, 22.05 kHz MP3. earshot predicts the size from the track durations, picks 24k, 20k or 16k, and encodes once. Budget is 480 KB (Orca's limit is 512 KB). If 16k still does not fit, the original track is dropped and the page says so. The files are `earshot-<brief id>-player.html`, `-explain.html`, `-explain2.html` and `-explain3.html`; each page needs a new file name.
 
 ## Speed
 

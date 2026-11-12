@@ -1,0 +1,6 @@
+{
+  "name": "status",
+  "out": "explain-status",
+  "expect": "no_image",
+  "reply": "Ran the test suite: 212 passed, 0 failed. No files changed. Nothing is waiting on you."
+}

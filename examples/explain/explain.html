@@ -1,0 +1,106 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box}
+html{background:radial-gradient(760px 340px at 100% 0,rgba(31,111,92,.10),transparent 65%),radial-gradient(520px 260px at 0 100%,rgba(180,83,9,.07),transparent 70%),linear-gradient(180deg,var(--background,#fbf8f3),#f4efe4);min-height:100%}
+body{margin:0;font-family:"Avenir Next","Gill Sans","Source Sans 3","Segoe UI","Trebuchet MS",sans-serif;font-size:16px;line-height:1.35;color:var(--foreground,#1b1b18)}
+.ex{max-width:1200px;margin:0 auto;padding:14px 12px 16px}
+h1{font-family:"Iowan Old Style","Source Serif 4","Palatino Linotype",Georgia,serif;font-size:26px;line-height:1.12;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}
+.tk{margin:0 0 12px;font-size:17px;color:var(--muted-foreground,#5b5a52)}
+.ps{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
+.pn{display:flex;flex-direction:column;background:var(--card,#ffffff);border:1px solid var(--border,#d6cfbf);border-top:5px solid var(--muted-foreground,#5b5a52);border-radius:12px;padding:12px 12px 14px;box-shadow:0 8px 20px -12px rgba(27,27,24,.35)}
+.pn.a{border-top-color:var(--primary,#1f6f5c)}
+.pn h2{font-size:17px;margin:0 0 10px;font-weight:700}
+.pn.a h2{color:var(--primary,#1f6f5c)}
+.fr{border:1.5px solid var(--foreground,#1b1b18);border-radius:10px;overflow:hidden;background:#fffdf8}
+.fr.phone{max-width:300px;margin:0 auto;border-radius:26px;border-width:2px}
+.tb{display:flex;align-items:center;gap:6px;padding:7px 10px;background:var(--secondary,#f1ebdd);border-bottom:1.5px solid var(--foreground,#1b1b18);font-size:13px;color:var(--muted-foreground,#5b5a52)}
+.tb i{width:10px;height:10px;border-radius:50%;background:#bdb5a3;display:block}
+.tb span{margin-left:6px;font-weight:600}
+.nt{width:84px;height:14px;margin:8px auto 0;border-radius:8px;background:var(--secondary,#f1ebdd)}
+.fb{padding:10px;display:flex;flex-direction:column;gap:8px}
+.el{padding:9px 12px;border-radius:9px;border:1.5px solid var(--border,#d6cfbf);background:#fff;font-size:16px;overflow-wrap:anywhere}
+.el.s-bad{border-color:var(--destructive,#b42318);background:#fdf1ef}
+.el.s-good{border-color:var(--primary,#1f6f5c);background:#eaf4f0}
+.el.s-muted{color:var(--muted-foreground,#5b5a52);background:var(--secondary,#f1ebdd);border-style:dashed}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;padding:8px}
+.ctl span{padding:6px 12px;border-radius:999px;border:1.5px solid var(--primary,#1f6f5c);color:var(--primary,#1f6f5c);font-weight:700;font-size:15px}
+.ctl.s-good span:first-child{background:var(--primary,#1f6f5c);color:#fff}
+.ctl.s-bad span{border-color:var(--destructive,#b42318);color:var(--destructive,#b42318)}
+.ctl.s-muted span{border-color:#bdb5a3;color:var(--muted-foreground,#5b5a52);font-weight:600}
+.ctl.s-muted span{border-color:#b9b1a0;color:var(--muted-foreground,#5b5a52);font-weight:600}
+.btn{border-radius:999px;text-align:center;font-weight:700;border-color:var(--primary,#1f6f5c);color:var(--primary,#1f6f5c)}
+.btn.s-good{background:var(--primary,#1f6f5c);color:#fff}
+.btn.s-bad{color:var(--destructive,#b42318);border-color:var(--destructive,#b42318)}
+.lnk{border:0;background:none;padding:2px 4px;color:var(--primary,#1f6f5c);text-decoration:underline;text-underline-offset:3px;font-weight:700}
+.lnk.s-bad{color:var(--destructive,#b42318);background:none}
+.lnk.s-good,.lnk.s-muted{background:none}
+.tx{border:0;background:none;padding:2px 4px}
+.tx.s-bad,.tx.s-good,.tx.s-muted{background:none}
+.bub{max-width:86%;border-radius:16px 16px 16px 4px;background:var(--secondary,#f1ebdd);border-color:transparent}
+.bub.r{align-self:flex-end;border-radius:16px 16px 4px 16px;background:var(--primary,#1f6f5c);color:#fff}
+.bar span{display:block;margin-bottom:7px;font-weight:600}
+.trk{height:8px;border-radius:4px;background:#e4dccb;overflow:hidden}
+.trk b{display:block;height:100%;background:var(--primary,#1f6f5c);border-radius:4px}
+.bar.s-bad .trk b{background:var(--destructive,#b42318)}
+.ew{display:flex;flex-direction:column;gap:3px}
+.ew.hl>.el{outline:3px solid #b45309;outline-offset:3px}
+.an{display:flex;align-items:flex-start;gap:5px;color:#b45309;font-weight:700;font-size:13px;line-height:1.22;padding:3px 2px 0 6px;max-width:100%}
+.an span{min-width:0;overflow-wrap:anywhere}
+.an svg{flex:none;margin-top:1px}
+.wv{display:flex;align-items:center;gap:10px;padding:8px 12px}
+.wb{display:flex;align-items:center;gap:2px;height:34px;flex:1}
+.wb i{display:block;flex:1;min-width:2px;background:#cfc6b2;border-radius:2px}
+.wb i.on{background:var(--primary,#1f6f5c)}
+.wv span{font-size:14px;font-weight:700;color:var(--muted-foreground,#5b5a52);white-space:nowrap}
+.jy{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.st{display:flex;flex-direction:column;gap:5px;position:relative;padding:8px 10px 10px 42px;border:1.5px solid var(--border,#d6cfbf);border-radius:10px;background:#fffdf8}
+.st.op{border-style:dashed;border-color:#b45309}
+.st.s-good{border-color:var(--primary,#1f6f5c)}
+.st small{font-size:13px;font-weight:700;color:var(--muted-foreground,#5b5a52)}
+.sn{position:absolute;left:10px;top:9px;width:24px;height:24px;border-radius:50%;background:var(--foreground,#1b1b18);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px}
+.sa{display:none}
+.cp{margin:auto 0 0;padding-top:9px;border-top:1px solid var(--border,#d6cfbf);font-size:15.5px;font-weight:600;color:var(--foreground,#1b1b18)}
+.row{border-radius:6px}
+.dg{display:block;width:100%;height:auto}
+.dg .lb{fill:var(--foreground,#1b1b18);font-family:"Avenir Next","Gill Sans","Source Sans 3","Segoe UI","Trebuchet MS",sans-serif}
+.dg .mt{stroke:#fff;stroke-width:4px;paint-order:stroke}
+.dg .lm{fill:var(--muted-foreground,#5b5a52);font-family:"Avenir Next","Gill Sans","Source Sans 3","Segoe UI","Trebuchet MS",sans-serif}
+.dg .tr{fill:#eee7d6}
+.dg .sg{fill:var(--primary,#1f6f5c)}
+.dg .sg.s-bad{fill:var(--destructive,#b42318)}
+.dg .sg.s-muted{fill:#bdb5a3}
+.dg .sl{fill:#fff;font-family:"Avenir Next","Gill Sans","Source Sans 3","Segoe UI","Trebuchet MS",sans-serif}
+.dg .sl.s-muted{fill:var(--foreground,#1b1b18)}
+.dg .so{font-family:"Avenir Next","Gill Sans","Source Sans 3","Segoe UI","Trebuchet MS",sans-serif}
+.dg .so.s-normal,.dg .so.s-muted{fill:var(--foreground,#1b1b18)}
+.dg .so.s-good{fill:var(--primary,#1f6f5c)}
+.dg .so.s-bad{fill:var(--destructive,#b42318)}
+.dg .mk{stroke:#b45309;stroke-width:3}
+.dg .mkh{fill:#b45309}
+.dg .ax{stroke:var(--muted-foreground,#5b5a52);stroke-width:1.5}
+.dg .nd{fill:#fff;stroke:var(--foreground,#1b1b18);stroke-width:1.5}
+.dg .nd.s-good{fill:#eaf4f0;stroke:var(--primary,#1f6f5c);stroke-width:2.5}
+.dg .nd.s-bad{fill:#fdf1ef;stroke:var(--destructive,#b42318);stroke-width:2.5}
+.dg .nd.s-muted{fill:var(--secondary,#f1ebdd);stroke:#bdb5a3}
+.dg .ll{stroke:#c9c0ac;stroke-width:1.5;stroke-dasharray:4 4}
+.dg .ln{stroke:var(--foreground,#1b1b18);stroke-width:2;fill:none}
+.dg .ln.ds{stroke-dasharray:6 4}
+.dg .ah{fill:var(--foreground,#1b1b18)}
+.dg .lg{fill:#fffdf8;stroke:var(--border,#d6cfbf)}
+.mx{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.mx li{background:var(--card,#ffffff);border:1px solid var(--border,#d6cfbf);border-radius:10px;padding:10px 12px}
+.ml{display:block;font-size:14px;color:var(--muted-foreground,#5b5a52);margin-bottom:2px}
+.mv{font-family:"Iowan Old Style","Source Serif 4","Palatino Linotype",Georgia,serif;font-size:26px;font-weight:700;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mv s{font-size:20px;color:var(--muted-foreground,#5b5a52);font-weight:400;text-decoration-thickness:1px;text-decoration-color:#9a9482}
+.mv b{color:var(--primary,#1f6f5c)}
+.tg{display:block;width:100%;font-family:"Avenir Next","Gill Sans","Source Sans 3","Segoe UI","Trebuchet MS",sans-serif;font-size:13px;font-weight:600;color:var(--muted-foreground,#5b5a52)}
+.tg.ms{color:var(--primary,#1f6f5c)}
+.co{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:10px;counter-reset:c}
+.co li{counter-increment:c;display:flex;gap:12px;align-items:baseline;font-size:17px;border-left:4px solid var(--primary,#1f6f5c);padding:2px 0 2px 12px}
+.co li:before{content:counter(c);font-family:"Iowan Old Style","Source Serif 4","Palatino Linotype",Georgia,serif;font-weight:700;font-size:22px;color:var(--primary,#1f6f5c)}
+@media(min-width:760px){.ps.two{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}h1{font-size:32px}.ex{padding:20px 22px 22px}.jy{flex-direction:row;align-items:stretch}.st{flex:1;padding:36px 10px 10px}.sn{top:8px}.sa{display:flex;align-items:center;color:var(--muted-foreground,#5b5a52)}}
+</style></head><body><main class="ex">
+<h1>The invoice page loads in one query</h1><p class="tk">You see the whole list with customer names at once instead of watching rows fill in one by one.</p>
+<section class="ps two"><article class="pn"><h2>Before: one lookup per row</h2><div class="fr mac"><div class="tb"><i></i><i></i><i></i><span>Invoices, staging</span></div><div class="fb"><div class="ew"><div class="el row s-normal">INV-1042 · customer loading</div></div><div class="ew"><div class="el row s-muted">INV-1043 · customer loading</div></div><div class="ew hl"><div class="el bar s-bad"><span>Customers loaded: 12 of 200</span><div class="trk"><b style="width:6%"></b></div></div><div class="an"><svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 17V3M3 8l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>one query per invoice, each one waits</span></div></div><div class="ew"><div class="el row s-muted">200 invoices per page</div></div><div class="ew"><div class="el ctl s-muted"><span>Filter</span><span>Sort</span><span>Export CSV</span></div></div><div class="ew"><div class="el row s-muted">Page 1 of 12</div></div></div></div><p class="cp">You waited 1.8 s while the page fetched each customer name separately, 200 times.</p></article><article class="pn a"><h2>After: one joined query</h2><div class="fr mac"><div class="tb"><i></i><i></i><i></i><span>Invoices, staging</span></div><div class="fb"><div class="ew"><div class="el row s-normal">INV-1042 · Acme Ltd</div></div><div class="ew"><div class="el row s-normal">INV-1043 · Bodega Nine</div></div><div class="ew hl"><div class="el bar s-good"><span>Customers loaded: 200 of 200</span><div class="trk"><b style="width:100%"></b></div></div><div class="an"><svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 17V3M3 8l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>invoice and customer joined before returning</span></div></div><div class="ew"><div class="el row s-muted">Uses the existing customer index</div></div><div class="ew"><div class="el ctl s-muted"><span>Filter</span><span>Sort</span><span>Export CSV</span></div></div><div class="ew"><div class="el row s-muted">Page 1 of 12</div></div></div></div><p class="cp">The list is usable in 240 ms and every row already shows its customer.</p></article></section>
+<ul class="mx"><li><span class="ml">Page ready</span><span class="mv"><s>1.8 s</s><svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M1 7h18M13 1l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg><b>240 ms</b></span><span class="tg ms">measured on the staging copy, 200 invoices</span></li></ul>
+</main></body></html>

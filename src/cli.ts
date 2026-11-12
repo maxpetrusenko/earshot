@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { Command } from "commander";
 import { cachedBaseUrl } from "./baseurl.js";
 import { ConfigError, defaultConfigPath, loadConfig } from "./config.js";
@@ -14,13 +14,14 @@ import { extractTagged } from "./extract/tagged.js";
 import { handleStop, type StopPayload } from "./hook/claude-code.js";
 import { handleNotify, parseNotifyArgv } from "./hook/codex.js";
 import { touchLock } from "./hook/state.js";
-import { install, InstallError, uninstall, type Mode, type Scope } from "./install/claude-code.js";
+import { claudeDir, install, InstallError, uninstall, type Mode, type Scope } from "./install/claude-code.js";
+import { installMod, uninstallMod } from "./install/claude-mod.js";
 import { ForeignNotifyError, installCodex, uninstallCodex } from "./install/codex.js";
 import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install/mcp.js";
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
-import { flowToMermaid } from "./sketch.js";
-import { fitOrcaPage, orcaDir, orcaLine, renderFlowHtml, writeOrcaPage } from "./orca.js";
+import { fitOrcaPage, orcaDir, orcaLine, pageTitle, writeOrcaPage } from "./orca.js";
+import { explainPng } from "./explain-png.js";
 import { readFileInBundle, readMeta } from "./bundle.js";
 import { flushTracing } from "./lib/llm-tracing.js";
 import { dryRun, executeBrief, loadPrepared, NothingUsableError } from "./run.js";
@@ -76,6 +77,8 @@ interface RunFlags {
   title?: string;
   voice?: string;
   sketch: boolean;
+  explain: boolean;
+  explainPng?: boolean;
   audio: boolean;
   json?: boolean;
   format?: string;
@@ -119,7 +122,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   const llm = createLlm(cfg.llm);
   if (flags.dryRun) {
     const ear = await dryRun(cfg, llm, input.text, log);
-    process.stdout.write(`${ear.title}\n\n${ear.script}\n\n${ear.flow ? flowToMermaid(ear.flow).mermaid : ear.mermaid || "sketch: none"}\n`);
+    process.stdout.write(`${ear.title}\n\n${ear.script}\n\n${ear.mermaid || "no diagram"}\n`);
     log(`${ear.words} words, ${ear.retries} retries`);
     return 0;
   }
@@ -130,7 +133,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   if (!orca) out(base, prep.meta.id);
   let result;
   try {
-    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch, noAudio: !flags.audio, waitForAudio: orca, log });
+    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch || !flags.explain, explain: orca, noAudio: !flags.audio, waitForAudio: orca, log });
   } catch (e) {
     if (e instanceof NothingUsableError) {
       err(`earshot: nothing usable was produced: ${e.message}`);
@@ -144,7 +147,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   log(`${meta.status} in ${meta.total_ms}ms (${timings}); bundle ${dir}`);
   log(`time to first audio: ${first}`);
   if (orca) {
-    const line = await orcaOutput(flags.orcaDir, meta.id, base, runStart);
+    const line = await orcaOutput(flags.orcaDir, meta.id, base, runStart, flags.explainPng === true);
     process.stdout.write(`${line}\n`);
   }
   await healthCheck(base);
@@ -152,7 +155,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
 }
 
 /** Orca mode: the inline player line, then the markdown links for the phone. Links only when a page cannot be made. */
-async function orcaOutput(orcaFlag: string | undefined, id: string, base: string, runStart: number): Promise<string> {
+async function orcaOutput(orcaFlag: string | undefined, id: string, base: string, runStart: number, png: boolean): Promise<string> {
   const links = briefLinks(base, id);
   const fallback = (why: string) => {
     log(`orca: ${why}; printing the markdown Listen line`);
@@ -166,14 +169,26 @@ async function orcaOutput(orcaFlag: string | undefined, id: string, base: string
   const original = meta?.tracks?.original.status === "ready" ? readFileInBundle(id, "original.mp3") : null;
   try {
     const t = performance.now();
-    const svg = readFileInBundle(id, "sketch.svg")?.toString("utf8");
+    const explainPages = (["explain", "explain2", "explain3"] as const).flatMap((k) => {
+      const h = readFileInBundle(id, k === "explain" ? "explain.html" : `${k}.html`)?.toString("utf8");
+      return h ? [{ kind: k, html: h }] : [];
+    });
     const fit = await fitOrcaPage(edited, original, { editedSeconds: meta?.tracks?.edited.duration_s ?? undefined, originalSeconds: meta?.tracks?.original.duration_s ?? undefined });
     log(`orca encode ${Math.round(performance.now() - t)}ms`);
     const file = writeOrcaPage(dir, id, fit.html, "player");
-    // The diagram is its own page, and only a multi-part task has one.
-    const flow = svg?.includes("<svg") ? writeOrcaPage(dir, id, renderFlowHtml({ title: meta?.title, svg }), "flow") : null;
-    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; flow ${flow ?? "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
-    return [orcaLine(file), ...(flow ? [orcaLine(flow, "Flow")] : []), listenMarkdown(links)].join("\n");
+    // Each explain page is its own display-only visual with its own headline; only a change worth a picture has any.
+    const explains = explainPages.map((p) => ({ file: writeOrcaPage(dir, id, p.html, p.kind), html: p.html, title: pageTitle(p.html) ?? "Explain" }));
+    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; explain ${explains.map((x) => x.file).join(", ") || "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
+    if (png) {
+      for (const x of explains) {
+        try {
+          log(`explain png ${await explainPng(x.html, join(dir, x.file.replace(/\.html$/, ".png")))}`);
+        } catch (e) {
+          log(`explain png failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+    }
+    return [orcaLine(file), ...explains.map((x) => orcaLine(x.file, x.title)), listenMarkdown(links)].join("\n");
   } catch (e) {
     return fallback(e instanceof Error ? e.message : String(e));
   }
@@ -209,7 +224,9 @@ program
   .option("--detach", "print the link now and finish the memo in a background process")
   .option("--title <text>", "override the generated title")
   .option("--voice <name>", "override tts.voice")
-  .option("--no-sketch", "skip the sketch")
+  .option("--no-sketch", "skip every picture (same as --no-explain)")
+  .option("--no-explain", "skip the visual explanation page")
+  .option("--explain-png", "also render the explanation as a 1080x1350 PNG next to the page (needs playwright and a Chromium)")
   .option("--no-audio", "skip the audio")
   .option("--json", "same as --format json")
   .option("--format <format>", "text (one markdown line: [Listen](...) · [Original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) orca (wait for the audio, write an inline player page for Orca chat, print the ::orca-visual line, then the links) or auto (orca when ORCA_CHAT_SCRATCH_DIR is writable, else links at once)")
@@ -309,15 +326,17 @@ const clientOf = (v: string | undefined): McpClient => {
 
 program
   .command("install <agent>")
-  .description("install into an agent: claude-code (skill or Stop hook), codex (notify program), mcp (MCP server config)")
-  .option("--mode <mode>", "claude-code: skill or hook", "skill")
+  .description("install into an agent: claude-code (skill, Stop hook or Play button mod), codex (notify program), mcp (MCP server config)")
+  .option("--mode <mode>", "claude-code: skill, hook or mod (Play button buttons inside Claude Code)", "skill")
   .option("--scope <scope>", "claude-code: user (~/.claude) or project (./.claude); mcp with claude-code: local, project or user")
   .option("--client <client>", "mcp: claude-code, codex or generic")
   .option("--write", "mcp with codex: merge the table into config.toml instead of printing it")
   .option("--bin <cmd>", "how the skill, hook or MCP entry should invoke earshot")
   .action((agent: string, o: { mode: string; scope?: string; client?: string; write?: boolean; bin?: string }) => {
     try {
-      if (agent === "claude-code") {
+      if (agent === "claude-code" && o.mode === "mod") {
+        printResults(installMod(claudeDir(scopeOf(o.scope ?? "user"), process.cwd())));
+      } else if (agent === "claude-code") {
         printResults(install({ mode: modeOf(o.mode), scope: scopeOf(o.scope ?? "user"), bin: o.bin, log: err }));
       } else if (agent === "codex") {
         printResults(installCodex({ bin: o.bin }));
@@ -340,8 +359,10 @@ program
   .description("remove what `install` added")
   .option("--scope <scope>", "claude-code: user or project", "user")
   .option("--client <client>", "mcp: codex (the others are removed in the client)")
-  .action((agent: string, o: { scope: string; client?: string }) => {
-    if (agent === "claude-code") printResults(uninstall({ scope: scopeOf(o.scope) }));
+  .option("--mode <mode>", "claude-code: mod removes only the Play button mod; default removes the skill and hook")
+  .action((agent: string, o: { scope: string; client?: string; mode?: string }) => {
+    if (agent === "claude-code" && o.mode === "mod") printResults(uninstallMod(claudeDir(scopeOf(o.scope), process.cwd())));
+    else if (agent === "claude-code") printResults(uninstall({ scope: scopeOf(o.scope) }));
     else if (agent === "codex") printResults(uninstallCodex());
     else if (agent === "mcp") printResults(mcpUninstall({ client: clientOf(o.client) }));
     else throw new InstallError(`unknown target "${agent}"; supported: claude-code, codex, mcp`);

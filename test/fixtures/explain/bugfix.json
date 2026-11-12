@@ -1,0 +1,6 @@
+{
+  "name": "bugfix",
+  "out": "explain-bugfix",
+  "expect": "visual",
+  "reply": "Fixed the flaky webhook retries. Root cause: the retry counter lived on the request object, and the queue rebuilt that object on every 5xx response, so the counter went back to zero each time and a failing endpoint was retried forever (we saw attempt 40 in the logs). The counter now lives on the job record in the database, so it survives the rebuild, and the worker stops after five attempts and marks the job dead. Verified with a test that fails an endpoint on purpose: before the change it retried more than 40 times in a minute, now it makes exactly 5 attempts and stops. Old rows that were already stuck were left alone; say if you want them cleaned up. 212 tests pass."
+}
