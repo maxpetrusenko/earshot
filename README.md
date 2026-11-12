@@ -60,7 +60,11 @@ Make a memo from another terminal:
 
 ```bash
 echo "Fixed the flaky webhook retries. The counter reset on every 5xx, so a dead endpoint was retried forever. Now it stops after five attempts. 212 tests pass. Open question: delete the 41k stale rows or archive them?" | earshot run
-# [Listen](http://localhost:7777/b/<id>/edited.mp3) · [Original](http://localhost:7777/b/<id>/original.mp3)
+```
+
+Output:
+```
+[Listen](http://localhost:7777/b/<id>/edited.mp3) · [Original](http://localhost:7777/b/<id>/original.mp3)
 ```
 
 Tap either word to start playing. Both tracks start streaming before they're complete. The card with diagram and transcript is at `/b/<id>`.
