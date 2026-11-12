@@ -65,7 +65,15 @@
     "tts",
     "voice",
     "ai-agents",
-    "developer-tools"
+    "developer-tools",
+    "text-to-speech",
+    "voice-memo",
+    "coding-assistant",
+    "agent-output",
+    "audio-summary",
+    "mermaid-diagram",
+    "kokoro",
+    "accessibility"
   ],
   "author": "Max Petrusenko"
 }
