@@ -4,7 +4,6 @@
  */
 const SANS = `"Avenir Next","Gill Sans","Source Sans 3","Segoe UI","Trebuchet MS",sans-serif`;
 const SERIF = `"Iowan Old Style","Source Serif 4","Palatino Linotype",Georgia,serif`;
-const MONO = `"SF Mono",Menlo,"Cascadia Mono",Consolas,monospace`;
 
 const FG = "var(--foreground,#1b1b18)";
 const MUTED = "var(--muted-foreground,#5b5a52)";
@@ -95,13 +94,6 @@ h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weig
 .dg .ln.ds{stroke-dasharray:6 4}
 .dg .ah{fill:${FG}}
 .dg .lg{fill:#fffdf8;stroke:${LINE}}
-.io{display:flex;flex-direction:column;gap:6px}
-.io .bx{border:1.5px solid ${FG};border-radius:10px;padding:10px 12px;background:#fffdf8}
-.io .bx.o{border-color:${ACC};background:#eaf4f0}
-.io .bx small{display:block;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${MUTED};margin-bottom:4px}
-.io .bx code{font-family:${MONO};font-size:15px;overflow-wrap:anywhere;white-space:pre-wrap}
-.io .tf{display:flex;align-items:center;gap:10px;padding:2px 8px;color:${ACC};font-weight:700}
-.io .tf svg{flex:none}
 .mx{list-style:none;margin:12px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .mx li{background:${CARD};border:1px solid ${LINE};border-radius:10px;padding:10px 12px}
 .ml{display:block;font-size:14px;color:${MUTED};margin-bottom:2px}

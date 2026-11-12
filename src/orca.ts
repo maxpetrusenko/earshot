@@ -176,3 +176,18 @@ export function writeOrcaPage(dir: string, id: string, html: string, kind: OrcaK
   writeFileSync(join(dir, file), html, { mode: 0o600 });
   return file;
 }
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'", "#8217": "\u2019" };
+
+/** The page's own headline, for the `title` on an Orca line. Null when the page has no h1. */
+export function pageTitle(html: string): string | null {
+  const raw = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1];
+  if (!raw) return null;
+  const text = raw
+    .replace(/<[^>]+>/g, "")
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&([a-z0-9#]+);/gi, (m, n: string) => ENTITIES[n.toLowerCase()] ?? m)
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || null;
+}

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-const E = 'https://earshot.example.invalid/b/abc123/edited.mp3'
-const O = 'https://earshot.example.invalid/b/abc123/original.mp3'
+const E = 'https://h.ts.net:8443/b/abc123/edited.mp3'
+const O = 'https://h.ts.net:8443/b/abc123/original.mp3'
 const WITH = `Done.\n\n[Listen](${E}) · [Listen original](${O})`
 
 const MSG = (text: string) =>
@@ -81,25 +81,13 @@ test('play, stop toggle and one clip at a time', async ($, on) => {
   await ui.unmount()
 })
 
-test('mobile is a no-op: the reply is untouched, no buttons', async ($, on) => {
+test('mobile is a no-op: the reply is untouched and no buttons are added', async ($, on) => {
   engine(on, [])
   const ui = await $.ui.mount({ ...MSG(WITH), surface: 'mobile' })
   expect(await ui.find({ type: 'Button' })).toBeUndefined()
   expect(await ui.find({ type: 'Link' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Listen/ })).toBeDefined()
   await ui.unmount()
-})
-
-test('label match is case-insensitive and accepts [Original]', async ($, on) => {
-  engine(on, [])
-  const alt = `Done.\n\n[listen](${E}) · [ORIGINAL](${O})`
-  const ui = await $.ui.mount({ ...MSG(alt), surface: 'desktop' })
-  expect((await ui.find({ type: 'Button', key: 'play' }))?.text).toBe('Play')
-  expect((await ui.find({ type: 'Button', key: 'original' }))?.text).toBe('Original')
-  await ui.unmount()
-  const ui2 = await $.ui.mount({ ...MSG(`Hi.\n\n[Original](${O})`), surface: 'desktop' })
-  expect((await ui2.find({ type: 'Button', key: 'play' }))?.text).toBe('Play')
-  await ui2.unmount()
 })
 
 test('both urls are parsed from the line and fetched on press', async ($, on) => {
@@ -114,4 +102,25 @@ test('both urls are parsed from the line and fetched on press', async ($, on) =>
   releases.forEach(r => r())
   await Promise.all(p)
   await ui.unmount()
+})
+
+test('accepts [Listen original] and a lone [Original], any case', async ($, on) => {
+  engine(on, [])
+  const alt = `Done.\n\n[Listen](${E}) · [Listen original](${O})`
+  const ui = await $.ui.mount({ ...MSG(alt), surface: 'desktop' })
+  expect((await ui.find({ type: 'Button', key: 'play' }))?.text).toBe('Play')
+  expect((await ui.find({ type: 'Button', key: 'original' }))?.text).toBe('Original')
+  await ui.unmount()
+
+  const lower = `Done.\n\n[listen](${E}) · [ORIGINAL](${O})`
+  const ui2 = await $.ui.mount({ ...MSG(lower), surface: 'desktop' })
+  expect((await ui2.find({ type: 'Button', key: 'play' }))?.text).toBe('Play')
+  expect((await ui2.find({ type: 'Button', key: 'original' }))?.text).toBe('Original')
+  await ui2.unmount()
+
+  const lone = `Done.\n\n[Original](${O})`
+  const ui3 = await $.ui.mount({ ...MSG(lone), surface: 'desktop' })
+  expect((await ui3.find({ type: 'Button', key: 'play' }))?.text).toBe('Play')
+  expect(await ui3.find({ type: 'Button', key: 'original' })).toBeUndefined()
+  await ui3.unmount()
 })

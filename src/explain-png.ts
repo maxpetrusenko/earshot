@@ -1,4 +1,4 @@
-/** Optional PNG of the explain page, 1080x1350, through Playwright. Off by default; playwright is a dev dependency. */
+/** Optional PNG of the explain page, 1080 px wide, through Playwright. Off by default; playwright is a dev dependency. */
 export const PNG_SIZE = { width: 1080, height: 1350 };
 
 export async function explainPng(html: string, out: string, size: { width: number; height: number } = PNG_SIZE): Promise<string> {
@@ -10,9 +10,10 @@ export async function explainPng(html: string, out: string, size: { width: numbe
   }
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage({ viewport: size });
+    const page = await browser.newPage({ viewport: size, deviceScaleFactor: 2 });
     await page.setContent(html, { waitUntil: "load" });
-    await page.screenshot({ path: out, clip: { x: 0, y: 0, ...size } });
+    // fullPage so a dense page is never cut at the viewport height.
+    await page.screenshot({ path: out, fullPage: true });
   } finally {
     await browser.close();
   }

@@ -82,7 +82,7 @@ The hook writes the pending brief (scrubbed `input.txt`, `meta.json`, pending ca
 
 ## Play button mod
 
-Optional. A Claude Code mod that hides the `[Listen](...) · [Listen original](...)` line (a lone `[Original](...)` is accepted too; labels match case-insensitively) and draws Play and Original buttons under the reply. One clip plays at a time and a second press stops it. Source: `integrations/claude-code/mod/earshot-player/`.
+Optional. A Claude Code mod that hides the `[Listen](...) · [Original](...)` line (older and single-track replies say `[Listen original]` or a lone `[Original]`; labels match case-insensitively) and draws Play and Original buttons under the reply. One clip plays at a time and a second press stops it. Source: `integrations/claude-code/mod/earshot-player/`.
 
 ```
 earshot install claude-code --mode mod      # copies four files to <claude dir>/skills/earshot-player/

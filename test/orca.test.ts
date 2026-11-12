@@ -207,7 +207,7 @@ describe("earshot run --format orca", () => {
       const lines = r.trim().split("\n");
       expect(lines).toHaveLength(3);
       expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
-      expect(lines[1]).toMatch(/-explain\.html" title="Explain"/);
+      expect(lines[1]).toMatch(/-explain\.html" title="Retries now stop at five"/);
       expect(lines[2]).toMatch(/^\[Listen\]\(/);
       const page = readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-explain.html"))!), "utf8");
       expect(page).toContain("Retries now stop at five");

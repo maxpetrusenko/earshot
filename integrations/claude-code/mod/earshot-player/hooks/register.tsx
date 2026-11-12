@@ -3,6 +3,8 @@ import type { Register } from 'claude-code'
 
 import type { EarshotClip } from '../types'
 
+// The earshot line is `[Listen](edited) · [Original](original)`. Older replies say
+// `[Listen original]`, and a lone `[Original]` appears when only that track exists.
 const LINE =
   /\n*\[(?:Listen|Listen original|Original)\]\((https?:\/\/[^)\s]+)\)(?:\s*·\s*\[(?:Listen original|Original)\]\((https?:\/\/[^)\s]+)\))?[ \t]*$/i
 
@@ -23,8 +25,8 @@ const cache = new Map<string, string>()
 
 export const register: Register = on => {
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    // Mobile: host audio plays on the Mac, not the phone. No-op: the reply's own
-    // links stay as they are so the phone opens them in its native player.
+    // Mobile: host audio plays on the Mac, not the phone. Leave the reply's own
+    // Listen links untouched so the phone opens them in its native player.
     if (e.surface === 'mobile') return next(e)
     const parsed = parseClip(e.props.text)
     if (parsed === null) return next(e)
@@ -34,8 +36,8 @@ export const register: Register = on => {
     const active = await read($, playing)
     const row = await next({ ...e, props: { ...e.props, text: body } })
 
-    // Bytes through curl with no proxy: the host's own fetch can go through a
-    // proxy that cannot reach private hosts. Falls back to the URL.
+    // Bytes through curl with no proxy: the host's own fetch goes through the
+    // agent-vault proxy, which answers 502 for the tailnet. Falls back to the URL.
     async function bytes(url: string) {
       const hit = cache.get(url)
       if (hit !== undefined) return { base64: hit, mime: 'audio/mpeg' }

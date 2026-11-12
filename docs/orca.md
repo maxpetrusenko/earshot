@@ -31,7 +31,6 @@ The model picks a type and fills panels for it:
 | `timeline` | lanes of segments with start and duration, on one shared scale |
 | `sequence` | actors and messages |
 | `architecture` | components and labeled data paths |
-| `example_io` | a concrete input, the transform, the output |
 
 It also returns a title, a takeaway, up to three callouts and metrics. A metric with `verified: true` is shown as measured; an unverified one is shown with the word "target". `{"no_image": true}` (or the text `NO_IMAGE`) means no page: a status update, a short answer, a test run.
 

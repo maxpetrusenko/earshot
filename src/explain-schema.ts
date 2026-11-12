@@ -6,7 +6,7 @@
 
 export class ExplainError extends Error {}
 
-export const EXPLAIN_TYPES = ["ui_before_after", "bug_before_after", "architecture", "timeline", "sequence", "example_io", "journey"] as const;
+export const EXPLAIN_TYPES = ["ui_before_after", "bug_before_after", "architecture", "timeline", "sequence", "journey"] as const;
 export type ExplainType = (typeof EXPLAIN_TYPES)[number];
 
 export type ElKind = "bar" | "controls" | "button" | "link" | "text" | "bubble" | "wave" | "row";
@@ -77,17 +77,7 @@ export interface ArchPanel {
   edges: { from: string; to: string; label: string }[];
   caption: string;
 }
-export interface IoPanel {
-  kind: "io";
-  label: string;
-  inLabel: string;
-  input: string;
-  transform: string;
-  outLabel: string;
-  output: string;
-  caption: string;
-}
-export type Panel = UiPanel | TimelinePanel | SequencePanel | ArchPanel | IoPanel | JourneyPanel;
+export type Panel = UiPanel | TimelinePanel | SequencePanel | ArchPanel | JourneyPanel;
 
 export interface Metric {
   label: string;
@@ -206,19 +196,6 @@ function archPanel(p: Record<string, unknown>): ArchPanel {
   return { kind: "architecture", label: cleanText(p.label, 50), components, edges, caption: cleanText(p.caption, 120) };
 }
 
-function ioPanel(p: Record<string, unknown>): IoPanel {
-  return {
-    kind: "io",
-    label: cleanText(p.label, 50),
-    inLabel: cleanText(p.input_label, 16) || "Input",
-    input: cleanText(p.input, 140),
-    transform: cleanText(p.transform, 100),
-    outLabel: cleanText(p.output_label, 16) || "Output",
-    output: cleanText(p.output, 140),
-    caption: cleanText(p.caption, 120),
-  };
-}
-
 function journeyPanel(p: Record<string, unknown>): JourneyPanel {
   const steps: JourneyStep[] = [];
   for (const s of arr(p.steps).slice(0, MAX.steps)) {
@@ -238,7 +215,6 @@ const BUILD: Record<ExplainType, (p: Record<string, unknown>) => Panel> = {
   timeline: timelinePanel,
   sequence: sequencePanel,
   architecture: archPanel,
-  example_io: ioPanel,
   journey: journeyPanel,
 };
 

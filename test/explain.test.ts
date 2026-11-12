@@ -14,31 +14,42 @@ const spec = (o: unknown = EXPLAIN_SPEC): ExplainSpec => parseExplain(o)!;
 const TIMELINE = {
   type: "timeline",
   title: "Original audio starts sooner",
-  takeaway: "The two tracks now render at the same time.",
+  takeaway: "You hear the original right away instead of after the edited memo.",
   panels: [
-    { label: "Before: one after the other", unit: "s", lanes: [{ label: "Edited", segments: [{ label: "speech", start: 0, duration: 5 }] }, { label: "Original", segments: [{ label: "waits", start: 0, duration: 5, state: "muted" }, { label: "speech", start: 5, duration: 6.7 }] }] },
-    { label: "After: in parallel", unit: "s", lanes: [{ label: "Edited", segments: [{ label: "speech", start: 0, duration: 5 }] }, { label: "Original", segments: [{ label: "speech", start: 0, duration: 6.7, state: "good" }] }] },
+    { label: "Before: one after the other", caption: "You waited 6.7 s before the original made a sound.", unit: "s", lanes: [{ label: "Edited", segments: [{ label: "speech", start: 0, duration: 5 }] }, { label: "Original", marker: 6.7, marker_label: "you hear it at 6.7 s", segments: [{ label: "waits", start: 0, duration: 5, state: "muted" }, { label: "speech", start: 5, duration: 6.7 }] }] },
+    { label: "After: in parallel", caption: "Both tracks start together, so you press play almost immediately.", unit: "s", lanes: [{ label: "Edited", segments: [{ label: "speech", start: 0, duration: 5 }] }, { label: "Original", marker: 0.6, marker_label: "you hear it at 0.6 s", segments: [{ label: "speech", start: 0, duration: 6.7, state: "good" }] }] },
   ],
 };
 const SEQUENCE = {
   type: "sequence",
   title: "Hook to player",
   takeaway: "A reply becomes a played memo.",
-  panels: [{ label: "Reply to audio", actors: ["Agent", "Hook", "Kokoro"], messages: [{ from: "Agent", to: "Hook", text: "final reply" }, { from: "Hook", to: "Kokoro", text: "script chunks" }, { from: "Kokoro", to: "Hook", text: "mp3", dashed: true }] }],
+  panels: [{ label: "Reply to audio", caption: "Your reply turns into a clip you can play without leaving the chat.", actors: ["Agent", "Hook", "Kokoro"], messages: [{ from: "Agent", to: "Hook", text: "final reply" }, { from: "Hook", to: "Kokoro", text: "script chunks" }, { from: "Kokoro", to: "Hook", text: "mp3", dashed: true }] }],
 };
 const ARCH = {
   type: "architecture",
   title: "Two paths now",
   takeaway: "Audio and picture are made side by side.",
-  panels: [{ label: "After", components: [{ id: "a", label: "Reply" }, { id: "b", label: "Script" }, { id: "c", label: "Explain" }, { id: "d", label: "Orca chat", state: "good" }], edges: [{ from: "a", to: "b", label: "text" }, { from: "a", to: "c", label: "text" }, { from: "b", to: "d", label: "mp3" }, { from: "c", to: "d", label: "html" }] }],
+  panels: [{ label: "After", caption: "The picture and the audio are made side by side, so neither waits.", components: [{ id: "a", label: "Reply" }, { id: "b", label: "Script" }, { id: "c", label: "Explain" }, { id: "d", label: "Orca chat", state: "good" }], edges: [{ from: "a", to: "b", label: "text" }, { from: "a", to: "c", label: "text" }, { from: "b", to: "d", label: "mp3" }, { from: "c", to: "d", label: "html" }] }],
 };
-const IO = {
-  type: "example_io",
-  title: "Redaction",
-  takeaway: "Secrets are replaced before the model sees the reply.",
-  panels: [{ label: "Example", input: "token=abc123 deploy ok", transform: "redact secrets", output: "token=[REDACTED] deploy ok" }],
+const JOURNEY = {
+  type: "journey",
+  title: "Reply to sound in one tap",
+  takeaway: "You can listen without waiting for the whole memo.",
+  panels: [
+    {
+      label: "After: the reply comes with audio",
+      caption: "You press play two steps after the agent finishes.",
+      steps: [
+        { label: "Agent replies", el: { kind: "bubble", text: "Done, 212 tests pass", value: -1 } },
+        { label: "Audio ready", el: { kind: "bar", text: "Listen 0:34", value: 0 } },
+        { label: "Press Play", state: "good", el: { kind: "wave", text: "0:07 / 0:34", value: 20 } },
+        { label: "Image, big tasks only", optional: true, el: { kind: "button", text: "What changed", value: -1 } },
+      ],
+    },
+  ],
 };
-const ALL = { ui: EXPLAIN_SPEC, timeline: TIMELINE, sequence: SEQUENCE, architecture: ARCH, example_io: IO };
+const ALL = { ui: EXPLAIN_SPEC, timeline: TIMELINE, sequence: SEQUENCE, architecture: ARCH, journey: JOURNEY };
 
 describe("parseExplain", () => {
   it("no_image and the text NO_IMAGE give no spec", () => {
@@ -153,10 +164,11 @@ describe("renderExplainHtml", () => {
   });
   it("shows a verified metric as measured and an unverified one as target", () => {
     const o = clone(EXPLAIN_SPEC);
-    o.metrics = [{ label: "Measured", before: "6.7 s", after: "0.6 s", verified: true }, { label: "Goal", before: "", after: "1 s", verified: false } as never];
+    o.metrics = [{ label: "Measured", before: "6.7 s", after: "0.6 s", verified: true, source: "measured on pro, 1.5 KB reply" }, { label: "Goal", before: "", after: "1 s", verified: false } as never];
     const html = renderExplainHtml(spec(o));
     expect(html).toContain("0.6 s");
     expect(html.match(/class="tg">target</g)).toHaveLength(1);
+    expect(html).toContain("measured, measured on pro, 1.5 KB reply");
     expect(html.indexOf("Goal")).toBeLessThan(html.indexOf("target"));
   });
   it("stacks the panels on a narrow screen and splits them on a wide one", () => {
@@ -185,8 +197,9 @@ describe("buildExplain", () => {
   const bare = { ...clone(EXPLAIN_SPEC), panels: clone(EXPLAIN_SPEC).panels.map((p) => ({ ...p, elements: [{ kind: "text", text: "Fixed" }, { kind: "text", text: "Tests" }] })) };
   it("uses the verbatim designer prompt plus the format appendix", () => {
     const sys = loadExplainPrompt();
-    expect(sys.startsWith("You are a visual explanation designer")).toBe(true);
-    expect(sys).toContain("A visual is not a task completion report.");
+    expect(sys.startsWith("You design small visual explanations")).toBe(true);
+    expect(sys).toContain("A picture earns its place only when it shows something that text states poorly");
+    expect(sys).toContain('"visuals"');
     expect(sys).toContain("OUTPUT FORMAT");
   });
   it("renders a good answer in one call", async () => {

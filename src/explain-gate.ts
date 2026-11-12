@@ -3,6 +3,9 @@ import type { ExplainSpec, Panel } from "./explain-schema.js";
 /** Labels that say a thing happened without showing it. As a whole element label they are rejected. */
 const EMPTY_LABELS = /^(?:fixed|implemented|completed|merged)[.!]?$/i;
 
+/** Text that stands in for a picture instead of being one. */
+const PLACEHOLDER = /\b(diagram|screenshot|placeholder|mockup|wireframe|tbd|todo|image of|picture of|lorem)\b/i;
+
 /** Every box-like label in a panel: elements, segments, lanes, actors, components, io fields. */
 function labels(p: Panel): string[] {
   switch (p.kind) {
@@ -14,8 +17,6 @@ function labels(p: Panel): string[] {
       return [...p.actors, ...p.messages.map((m) => m.text)];
     case "architecture":
       return [...p.components.map((c) => c.label), ...p.edges.map((e) => e.label)];
-    case "io":
-      return [p.input, p.transform, p.output];
     case "journey":
       return p.steps.flatMap((s) => [s.label, s.el.text]);
   }
@@ -60,10 +61,6 @@ export function visualDensity(spec: ExplainSpec): number {
         vis += p.components.length * 0.8 + p.edges.length * 1.4;
         txt += p.edges.reduce((a, m) => a + words(m.label) * 0.5, 0);
         break;
-      case "io":
-        txt += words(p.input) + words(p.transform) + words(p.output) + 1;
-        vis += 0.5;
-        break;
       case "journey":
         for (const s of p.steps) {
           vis += (EL_AREA[s.el.kind] ?? 0) + 0.9; // the mockup and the arrow to the next step
@@ -78,10 +75,12 @@ export function visualDensity(spec: ExplainSpec): number {
 /** Does the panel show something (elements, segments, messages, data paths), not just labels? */
 function panelProblem(p: Panel, i: number): string | null {
   const n = `panel ${i + 1}`;
+  if (!p.caption) return `${n} needs a caption: one sentence about what the user can now do`;
   switch (p.kind) {
     case "ui":
       if (p.elements.length < 2) return `${n} has fewer than two elements; draw the actual interface`;
-      if (p.elements.every((e) => e.kind === "text")) return `${n} is only text labels; use bar, button, link, bubble, image or row elements`;
+      if (p.elements.every((e) => e.kind === "text")) return `${n} is only text labels; use bar, controls, button, link, bubble, wave or row elements`;
+      if (p.elements.filter((e) => e.kind !== "text").length < 3) return `${n} is too sparse; draw at least three real interface elements`;
       return null;
     case "timeline":
       if (p.lanes.reduce((a, l) => a + l.segments.length, 0) < 2) return `${n} has fewer than two segments; give each lane segments with start and duration`;
@@ -93,12 +92,9 @@ function panelProblem(p: Panel, i: number): string | null {
       if (p.components.length < 3 || p.edges.length < 2) return `${n} needs three components and at least two data paths between them`;
       if (!p.edges.some((e) => e.label)) return `${n} has data paths without a label saying what travels on them`;
       return null;
-    case "io":
-      if (!p.input || !p.output || !p.transform) return `${n} needs a concrete input, a transform and an output`;
-      return null;
     case "journey":
       if (p.steps.length < 3) return `${n} needs at least three user steps, each with the real thing the user sees`;
-      if (p.steps.every((s) => s.el.kind === "text")) return `${n} steps are only text; give each step a button, bar, link, bubble or controls`;
+      if (p.steps.every((s) => s.el.kind === "text")) return `${n} steps are only text; give each step a button, bar, link, bubble, wave or controls`;
       return null;
   }
 }
@@ -118,6 +114,8 @@ export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY)
     if (bad) return bad;
     const empty = labels(p).find((l) => EMPTY_LABELS.test(l.trim()));
     if (empty) return `"${empty}" is a bare status label; show the actual interface, transformation or behavior instead of labeling it`;
+    const fake = labels(p).find((l) => PLACEHOLDER.test(l));
+    if (fake) return `"${fake}" describes a picture instead of being one; draw the real interface, values or timeline`;
   }
   const d = visualDensity(spec);
   if (d < minDensity) return `the picture is mostly text (visual density ${d.toFixed(2)}, needs ${minDensity}); draw more mockup elements, arrows, highlights or timeline bars and fewer sentences, or return no_image`;

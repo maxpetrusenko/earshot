@@ -1,6 +1,6 @@
 import { EXPLAIN_CSS } from "./explain-css.js";
 import { architectureSvg, sequenceSvg, timelineMax, timelineSvg } from "./explain-svg.js";
-import type { ExplainSpec, IoPanel, JourneyPanel, Metric, Panel, TimelinePanel, UiEl, UiPanel } from "./explain-schema.js";
+import type { ExplainSpec, JourneyPanel, Metric, Panel, TimelinePanel, UiEl, UiPanel } from "./explain-schema.js";
 import { escapeHtml as e } from "./orca.js";
 
 /**
@@ -9,13 +9,14 @@ import { escapeHtml as e } from "./orca.js";
  * iOS collapse (only the player hides there).
  */
 
-const ARROW = `<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M11 2v14M5 11l6 7 6-7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ARROW_R = `<svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true"><path d="M1 7h18M13 1l7 6-7 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const NOTE_ARROW = `<svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 17V3M3 8l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
+/** A deterministic waveform: no randomness, so the same spec always draws the same bars. */
 const WAVE = [30, 55, 80, 45, 90, 60, 35, 70, 95, 50, 40, 75, 85, 45, 60, 30, 65, 90, 55, 35, 70, 50, 80, 40];
 
 /** The raw mockup of one element kind, without highlight or note. */
-function mock(kind: UiEl["kind"], text: string, value: number, side: string, st: string): string {
+function mock(kind: UiEl["kind"], text: string, value: number, side: "left" | "right", st: string): string {
   switch (kind) {
     case "bar": {
       const track = `<div class="trk"><b style="width:${value >= 0 ? Math.round(value) : 35}%"></b></div>`;
@@ -30,7 +31,7 @@ function mock(kind: UiEl["kind"], text: string, value: number, side: string, st:
     case "bubble":
       return `<div class="el bub ${side === "right" ? "r" : ""} ${st}">${e(text)}</div>`;
     case "wave": {
-      const played = value >= 0 ? value : 40;
+      const played = value >= 0 ? value : 35;
       const bars = WAVE.map((h, i) => `<i class="${(i / WAVE.length) * 100 < played ? "on" : ""}" style="height:${h}%"></i>`).join("");
       return `<div class="el wv ${st}"><div class="wb" aria-hidden="true">${bars}</div><span>${e(text)}</span></div>`;
     }
@@ -41,8 +42,6 @@ function mock(kind: UiEl["kind"], text: string, value: number, side: string, st:
   }
 }
 
-const NOTE_ARROW = `<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 17V3M3 8l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-
 function element(el: UiEl): string {
   const m = mock(el.kind, el.text, el.value, el.side, `s-${el.state}`);
   const note = el.note ? `<div class="an">${NOTE_ARROW}<span>${e(el.note)}</span></div>` : "";
@@ -51,7 +50,10 @@ function element(el: UiEl): string {
 
 function journeyBody(p: JourneyPanel): string {
   const steps = p.steps
-    .map((s, i) => `<li class="st${s.optional ? " op" : ""} s-${s.state}"><b class="sn">${i + 1}</b><small>${e(s.label)}</small>${mock(s.el.kind, s.el.text, s.el.value, "left", `s-${s.state}`)}</li>`)
+    .map(
+      (s, i) =>
+        `<li class="st${s.optional ? " op" : ""} s-${s.state}"><b class="sn">${i + 1}</b><small>${e(s.label)}</small>${mock(s.el.kind, s.el.text, s.el.value, "left", `s-${s.state}`)}</li>`,
+    )
     .join(`<li class="sa" aria-hidden="true">${ARROW_R}</li>`);
   return `<ol class="jy">${steps}</ol>`;
 }
@@ -60,10 +62,6 @@ function uiBody(p: UiPanel): string {
   const els = p.elements.map(element).join("");
   const top = p.frame === "mac" ? `<div class="tb"><i></i><i></i><i></i><span>${e(p.title)}</span></div>` : p.frame === "phone" ? `<div class="nt"></div>` : p.title ? `<div class="tb"><span>${e(p.title)}</span></div>` : "";
   return `<div class="fr ${p.frame}">${top}<div class="fb">${els}</div></div>`;
-}
-
-function ioBody(p: IoPanel): string {
-  return `<div class="io"><div class="bx"><small>${e(p.inLabel)}</small><code>${e(p.input)}</code></div><div class="tf">${ARROW}<span>${e(p.transform)}</span></div><div class="bx o"><small>${e(p.outLabel)}</small><code>${e(p.output)}</code></div></div>`;
 }
 
 function body(p: Panel, i: number, tmax: number): string {
@@ -76,8 +74,6 @@ function body(p: Panel, i: number, tmax: number): string {
       return sequenceSvg(p, String(i));
     case "architecture":
       return architectureSvg(p, String(i));
-    case "io":
-      return ioBody(p);
     case "journey":
       return journeyBody(p);
   }
@@ -85,7 +81,8 @@ function body(p: Panel, i: number, tmax: number): string {
 
 function metric(m: Metric): string {
   const value = m.before ? `<s>${e(m.before)}</s>${ARROW_R}<b>${e(m.after)}</b>` : `<b>${e(m.after)}</b>`;
-  return `<li><span class="ml">${e(m.label)}</span><span class="mv">${value}</span><span class="tg ${m.verified ? "ms" : ""}">${m.verified ? `measured${m.source ? `, ${e(m.source)}` : ""}` : "target"}</span></li>`;
+  const note = m.verified ? `measured${m.source ? `, ${e(m.source)}` : ""}` : "target";
+  return `<li><span class="ml">${e(m.label)}</span><span class="mv">${value}</span><span class="tg${m.verified ? " ms" : ""}">${note}</span></li>`;
 }
 
 /** The explain page body and styles as one self-contained document. */

@@ -20,7 +20,7 @@ import { ForeignNotifyError, installCodex, uninstallCodex } from "./install/code
 import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install/mcp.js";
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
-import { fitOrcaPage, orcaDir, orcaLine, writeOrcaPage } from "./orca.js";
+import { fitOrcaPage, orcaDir, orcaLine, pageTitle, writeOrcaPage } from "./orca.js";
 import { explainPng } from "./explain-png.js";
 import { readFileInBundle, readMeta } from "./bundle.js";
 import { flushTracing } from "./lib/llm-tracing.js";
@@ -177,7 +177,7 @@ async function orcaOutput(orcaFlag: string | undefined, id: string, base: string
     log(`orca encode ${Math.round(performance.now() - t)}ms`);
     const file = writeOrcaPage(dir, id, fit.html, "player");
     // Each explain page is its own display-only visual with its own headline; only a change worth a picture has any.
-    const explains = explainPages.map((p) => ({ file: writeOrcaPage(dir, id, p.html, p.kind), html: p.html, title: /<h1>(.*?)<\/h1>/.exec(p.html)?.[1]?.replace(/&[a-z#0-9]+;/gi, " ").trim() || "Explain" }));
+    const explains = explainPages.map((p) => ({ file: writeOrcaPage(dir, id, p.html, p.kind), html: p.html, title: pageTitle(p.html) ?? "Explain" }));
     log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; explain ${explains.map((x) => x.file).join(", ") || "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
     if (png) {
       for (const x of explains) {
