@@ -25,7 +25,7 @@ EARSHOT_EOF
 ```
 
 3. Outside Orca the command prints one markdown line at once, like `[Listen](<url>) · [Original](<url>)`. Each link starts playing when tapped.
-   Inside Orca (`ORCA_CHAT_SCRATCH_DIR` is set and writable) it waits for the finished audio, about 20 to 40 seconds, and prints two lines: `::orca-visual{file="earshot-<id>.html" title="Listen"}` for the Mac player, then the markdown line for the phone.
+   Inside Orca (`ORCA_CHAT_SCRATCH_DIR` is set and writable) it waits for the finished audio, about 10 seconds, and prints two lines: `::orca-visual{file="earshot-<id>.html" title="Listen"}` for the Mac player, then the markdown line for the phone.
    Copy what it prints verbatim.
 4. Send your final reply, unchanged. Make the last lines of the message exactly what the command printed, with nothing after them: the single markdown line, or in Orca the `::orca-visual` line on its own line (outside any code block) followed by the markdown line. Do not add the card link or any other link, and do not turn the links into raw URLs.
 
