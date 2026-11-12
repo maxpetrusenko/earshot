@@ -1,8 +1,8 @@
 export type ScriptStyle = "short" | "story" | "brief";
 
-/** Prompt file and version label per style. short is prompt v3 (the default), story is v1, brief is the original v0. */
+/** Prompt file and version label per style. short is prompt v4 (the default; v3 shipped with its body missing), story is v1, brief is the original v0. */
 export const PROMPTS: Record<ScriptStyle, { file: string; version: string }> = {
-  short: { file: "ear-script.v3.txt", version: "ear-script.v3" },
+  short: { file: "ear-script.v4.txt", version: "ear-script.v4" },
   story: { file: "ear-script.v1.txt", version: "ear-script.v1" },
   brief: { file: "ear-script.v0.txt", version: "ear-script.v0" },
 };
@@ -12,3 +12,6 @@ export const PROMPT_VERSION = PROMPTS[DEFAULT_STYLE].version;
 
 /** short is a 20 to 40 second summary: hard cap, enforced in code by cutting at a sentence boundary. */
 export const SHORT_MAX_WORDS = 110;
+
+/** The visual explainer: the verbatim prompt file plus an output-format appendix (see src/explain.ts). */
+export const EXPLAIN_PROMPT = { file: "visual-explainer.v1.txt", appendix: "visual-explainer-format.v1.txt", version: "visual-explainer.v1+format.1" };

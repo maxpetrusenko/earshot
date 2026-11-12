@@ -5,7 +5,8 @@ import { chunkText, speakableOriginal } from "./speech.js";
 import { Semaphore, TrackWriter } from "./track.js";
 import type { Config } from "./config.js";
 import { beginRun, endRun } from "./lib/llm-tracing.js";
-import { buildSketch, renderFlow, type FlowSpec } from "./sketch.js";
+import { buildSketch } from "./sketch.js";
+import { buildExplain } from "./explain.js";
 import type { LlmProvider } from "./llm.js";
 import { redact } from "./redact.js";
 import { prepareBrief, scrub, type Prepared } from "./prepare.js";
@@ -17,7 +18,10 @@ export interface RunOptions {
   session?: string;
   title?: string;
   voice?: string;
+  /** Skip every picture: the explain page and the legacy sketch. */
   noSketch?: boolean;
+  /** Make the explain page (one more LLM call, in parallel with the script). The Orca output asks for it. */
+  explain?: boolean;
   noAudio?: boolean;
   /** The caller waits for both finished tracks, so synthesize chunks in parallel and do not hold the original back. */
   waitForAudio?: boolean;
@@ -150,6 +154,19 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
       updateMeta(id, (m) => void (m.tracks = null));
     }
 
+    // The explain page: one LLM call from the reply text, started now so it runs alongside the script and the
+    // speech. It never holds audio back; a failure is recorded and the memo still ships.
+    const explainJob: Promise<void> =
+      opts.explain && !opts.noSketch && cfg.image.type !== "none"
+        ? stage(stages, "explain", log, () => buildExplain(llm, clean(text))).then(
+            (r) => {
+              if (r.html) writeFileInBundle(id, "explain.html", r.html);
+              else log(`explain: no image (${r.reason})`);
+            },
+            (e) => void failures.push(`explain: ${errMsg(e)}`),
+          )
+        : Promise.resolve();
+
     // Original track: no LLM. It starts speaking while the edited track is still waiting for its first token.
     const originalDone = stage(stages, "tts-original", log, async () => {
       if (!originalW) return;
@@ -160,23 +177,11 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
       if (originalW.error) throw new Error(originalW.error);
     }).catch((e) => void failures.push(`original: ${errMsg(e)}`));
 
-    // The sketch starts when the model finishes the diagram and never holds up audio.
+    // The legacy sketch (story and brief styles) starts when the model finishes the diagram and never holds up audio.
     let sketchJob: Promise<void> = Promise.resolve();
     const startSketch = (mermaid: string) => {
-      if (opts.noSketch || cfg.image.type === "none") return;
+      if (opts.noSketch || opts.explain || cfg.image.type === "none") return; // the explain page replaces the sketch
       sketchJob = stage(stages, "sketch", log, () => buildSketch(llm, clean(mermaid))).then(
-        (r) => {
-          writeFileInBundle(id, "sketch.svg", r.svg);
-          meta.image = { renderer: cfg.image.renderer, mermaid: r.mermaid };
-          updateMeta(id, (m) => void (m.image = meta.image));
-        },
-        (e) => void failures.push(`sketch: ${errMsg(e)}`),
-      );
-    };
-
-    const startFlow = (flow: FlowSpec) => {
-      if (opts.noSketch || cfg.image.type === "none") return;
-      sketchJob = stage(stages, "sketch", log, () => renderFlow(flow)).then(
         (r) => {
           writeFileInBundle(id, "sketch.svg", r.svg);
           meta.image = { renderer: cfg.image.renderer, mermaid: r.mermaid };
@@ -203,7 +208,6 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
                 updateMeta(id, (m) => void (m.title = clean(t)));
               },
               onMermaid: startSketch,
-              onFlow: startFlow,
             },
             { evidenceHosts: cfg.privacy.evidence_hosts, style: cfg.script.style, redact: cfg.privacy.redact, log },
           ),
@@ -217,7 +221,7 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
       editedW?.fail(errMsg(e));
       failures.push(`edited: ${errMsg(e)}`);
     }
-    await Promise.all([originalDone, sketchJob]);
+    await Promise.all([originalDone, sketchJob, explainJob]);
 
     const disk = readMeta(id);
     const originalReady = !audioOn ? false : disk?.tracks?.original.status === "ready";

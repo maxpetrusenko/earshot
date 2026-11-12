@@ -5,7 +5,7 @@ Read when: you run Claude Code inside Orca and want to tap Play in the chat inst
 Orca's native chat renders an HTML page inline when a reply has `::orca-visual{file="<name>.html" title="..."}` on its own line, with the file in `$ORCA_CHAT_SCRATCH_DIR`. earshot writes up to two pages and prints their lines in this order:
 
 1. `earshot-<id>-player.html`: a compact control bar and nothing else, no image. Play and Original (one track at a time, resume from the paused offset), a seek bar, back and forward 10 s, a speed button cycling 1x, 1.25x, 1.5x and 2x, and elapsed / total time. Space toggles play and pause when the frame has focus. Errors show in the status line under the bar.
-2. `earshot-<id>-flow.html`: the diagram, only for a bigger task (see Flow below).
+2. `earshot-<id>-explain.html`: a visual explanation of what changed, only when a picture helps (see Explain below). Display-only, and it shows on iPhone.
 3. `[Listen](...) · [Original](...)`, always the last line.
 
 ## Devices
@@ -19,15 +19,25 @@ The reply text is the same on Orca Mac and Orca iOS, and iOS cannot tap an inlin
 
 Limit: the Listen and Original links cannot be hidden on the Mac. The markdown is identical on both devices, and Orca's own visual skill (`orca-chat-visuals`) documents only `::orca-visual{file title}` with no device-conditional content, so there is nothing to key off. earshot keeps the links, makes them the last line, and keeps them to one short line. The collapse is tested in headless WebKit with an iPhone device profile (frame height 0), and the same page keeps its full height in desktop WebKit and Chromium.
 
-## Flow
+## Explain
 
-Small replies get no image: a status update, a short answer, a test run, one fix in one place. The ear-script call (prompt `ear-script.v3`) returns `"sketch": "none"` for those. For a task that touched three or more connected parts it returns a structure instead:
+The picture is an explanation of what changed, not a chain of boxes. One LLM call (stage `explain`) takes the reply text, redacted when `privacy.redact` is on, and returns structured JSON only. The system prompt is `prompts/visual-explainer.v1.txt` verbatim plus `prompts/visual-explainer-format.v1.txt`, which replaces its output list with the schema. The call starts at the beginning of the pipeline, next to the script and the speech, so it never delays audio; a failure is recorded as a non-fatal `explain:` failure.
 
-```json
-{"nodes": [{"id": "a", "label": "Webhook"}, ...], "edges": [["a", "b"], ...], "broken": "b", "fixed": "c"}
-```
+The model picks a type and fills panels for it:
 
-earshot validates it (3 to 7 nodes, labels cut to plain words, edges between known nodes, otherwise no image), builds the Mermaid itself, renders it top-down with the existing renderer, and restyles the two marked nodes: the broken one gets a red border and fill and the word "broke", the fixed one a green border and fill and "fixed". The output goes through the same SVG sanitizer as before. `pnpm tsx scripts/sketch-hitrate.ts` runs the live model over the fixtures in `test/fixtures/outputs` and `test/fixtures/sketch` and prints the none-versus-flow hit rate.
+| Type | Panels |
+|---|---|
+| `ui_before_after`, `bug_before_after` | two panels of interface elements (bar, controls, button, link, bubble, image, row, text) in a Mac window, phone, chat or plain frame |
+| `timeline` | lanes of segments with start and duration, on one shared scale |
+| `sequence` | actors and messages |
+| `architecture` | components and labeled data paths |
+| `example_io` | a concrete input, the transform, the output |
+
+It also returns a title, a takeaway, up to three callouts and metrics. A metric with `verified: true` is shown as measured; an unverified one is shown with the word "target". `{"no_image": true}` (or the text `NO_IMAGE`) means no page: a status update, a short answer, a test run.
+
+Code validates the JSON strictly (unknown fields dropped, strings capped and stripped of emoji and long dashes, counts capped), then a quality gate checks it: a before/after type needs two panels with real elements, a timeline needs segments, a sequence needs messages, an architecture needs labeled data paths, and a bare "Fixed", "Implemented", "Completed" or "Merged" label is rejected. On a miss the model is asked once more with the gate's feedback; a second miss counts as no image. Fixed HTML and SVG templates draw the page (the model never writes markup), every value is escaped and the SVG goes through the allowlist sanitizer. The page is light, uses a local font stack, reads Orca theme tokens with fallbacks, never redefines one, stacks the panels below 760 px and sits side by side above it. Only the player collapses on iOS; this page does not.
+
+`--explain-png` also writes `earshot-<id>-explain.png` (1080x1350, through Playwright, which must be installed with a Chromium) next to the page. `--no-explain` or `--no-sketch` skips the stage, and `image.type: none` disables it in config. `pnpm tsx scripts/explain-demo.ts [--shots]` runs the live model over `test/fixtures/explain/*.json` and writes pages and screenshots to `~/earshot-demo/`.
 
 ## Why Web Audio
 
@@ -45,7 +55,7 @@ The Stop hook treats either line as already narrated.
 
 ## Page size
 
-The player page embeds both tracks, re-encoded with ffmpeg to mono, 22.05 kHz MP3. earshot predicts the size from the track durations, picks 24k, 20k or 16k, and encodes once. Budget is 480 KB (Orca's limit is 512 KB). If 16k still does not fit, the original track is dropped and the page says so. The files are `earshot-<brief id>-player.html` and `earshot-<brief id>-flow.html`; each page needs a new file name.
+The player page embeds both tracks, re-encoded with ffmpeg to mono, 22.05 kHz MP3. earshot predicts the size from the track durations, picks 24k, 20k or 16k, and encodes once. Budget is 480 KB (Orca's limit is 512 KB). If 16k still does not fit, the original track is dropped and the page says so. The files are `earshot-<brief id>-player.html` and `earshot-<brief id>-explain.html`; each page needs a new file name.
 
 ## Speed
 

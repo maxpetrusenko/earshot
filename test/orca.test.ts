@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseConfig } from "../src/config.js";
 import { decide } from "../src/hook/claude-code.js";
-import { escapeHtml, fitOrcaPage, hasOrcaLine, orcaDir, orcaLine, predictPageBytes, renderFlowHtml, renderPlayerHtml, ORCA_BUDGET_BYTES, type Reencode } from "../src/orca.js";
+import { EXPLAIN_SPEC } from "./explain-fixtures.js";
+import { escapeHtml, fitOrcaPage, hasOrcaLine, orcaDir, orcaLine, predictPageBytes, renderPlayerHtml, ORCA_BUDGET_BYTES, type Reencode } from "../src/orca.js";
 import { fakeMp3, startFakeProvider } from "./helpers.js";
 
 const fakeEnc: Reencode = async (mp3, kbps) => Buffer.alloc(Math.round((mp3.length * kbps) / 128), 1);
@@ -52,20 +53,6 @@ describe("renderPlayerHtml", () => {
     expect(h).toContain("&lt;img src=x onerror=1&gt; &amp; more");
     expect(h).not.toContain('id="bo"');
     expect(escapeHtml(`<>&"'`)).toBe("&lt;&gt;&amp;&quot;&#39;");
-  });
-});
-
-describe("renderFlowHtml", () => {
-  const svg = '<svg viewBox="0 0 10 10"><script>bad()</script><rect width="5" height="5" onclick="x()"/></svg>';
-  const html = renderFlowHtml({ title: "Fixed <retries>", svg });
-  it("is the title and the sanitized diagram, with no player", () => {
-    expect(html).toContain("<rect");
-    expect(html).not.toContain("bad()");
-    expect(html).not.toContain("onclick");
-    expect(html).toContain("Fixed &lt;retries&gt;");
-    expect(html).not.toContain('id="be"');
-    expect(html).not.toContain("<script");
-    expect(html.indexOf('class="ti"')).toBeLessThan(html.indexOf('class="sk"'));
   });
 });
 
@@ -146,7 +133,7 @@ describe("earshot run --format orca", () => {
   beforeAll(async () => {
     home = mkdtempSync(join(tmpdir(), "earshot-orca-"));
     dir = mkdtempSync(join(tmpdir(), "earshot-orca-dir-"));
-    provider = await startFakeProvider({ sketch: "none" });
+    provider = await startFakeProvider();
     cfgPath = join(home, "cfg.yaml");
     writeFileSync(cfgPath, `llm:\n  type: openai-compatible\n  base_url: ${provider.url}\n  model: fake\ntts:\n  base_url: ${provider.url}\nserve:\n  mode: loopback\n  port: 17778\n`);
   });
@@ -173,7 +160,7 @@ describe("earshot run --format orca", () => {
     const r = await run(["--format", "orca"], { ORCA_CHAT_SCRATCH_DIR: dir });
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/^::orca-visual\{file="earshot-[A-Za-z0-9]{16}-player\.html" title="Listen"\}\n\[Listen\]\(http:\/\/localhost:17778\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Original\]\(\S+\/original\.mp3\)\n$/);
-    expect(readdirSync(dir).filter((f) => f.endsWith("-flow.html"))).toEqual([]);
+    expect(readdirSync(dir).filter((f) => f.endsWith("-explain.html"))).toEqual([]);
     const file = readdirSync(dir).find((f) => f.endsWith("-player.html"))!;
     expect(statSync(join(dir, file)).size).toBeLessThan(ORCA_BUDGET_BYTES);
     const html = readFileSync(join(dir, file), "utf8");
@@ -183,7 +170,7 @@ describe("earshot run --format orca", () => {
   });
   it("auto prints both lines in Orca and only the links outside it", async () => {
     const inOrca = await run(["--format", "auto"], { ORCA_CHAT_SCRATCH_DIR: dir });
-    expect(inOrca.stdout.split("\n").filter(Boolean)).toHaveLength(2); // sketch none: player line and links
+    expect(inOrca.stdout.split("\n").filter(Boolean)).toHaveLength(2); // explain none: player line and links
     expect(inOrca.stdout).toMatch(/^::orca-visual/);
     const outside = await run(["--format", "auto"]);
     expect(outside.stdout.trim().split("\n")).toHaveLength(1);
@@ -202,11 +189,11 @@ describe("earshot run --format orca", () => {
     const r = await run(["--format", "orca", "--detach"]);
     expect(r.status).toBe(2);
   });
-  it("a multi-part reply adds a flow page: player line, flow line, then the links last", async () => {
-    const p = await startFakeProvider({ sketch: { nodes: [{ id: "a", label: "Webhook" }, { id: "b", label: "Mailer" }, { id: "c", label: "Guard" }], edges: [["a", "b"], ["b", "c"]], broken: "b", fixed: "c" } });
+  it("a change worth a picture adds an explain page: player line, explain line, then the links last", async () => {
+    const p = await startFakeProvider({ explain: EXPLAIN_SPEC });
     const cfg2 = join(home, "cfg2.yaml");
     writeFileSync(cfg2, `llm:\n  type: openai-compatible\n  base_url: ${p.url}\n  model: fake\ntts:\n  base_url: ${p.url}\nserve:\n  mode: loopback\n  port: 17778\n`);
-    const d2 = mkdtempSync(join(tmpdir(), "earshot-orca-flow-"));
+    const d2 = mkdtempSync(join(tmpdir(), "earshot-orca-explain-"));
     try {
       const r = await new Promise<string>((resolve) => {
         const e: NodeJS.ProcessEnv = { ...process.env, EARSHOT_HOME: home, ORCA_CHAT_SCRATCH_DIR: d2 };
@@ -220,15 +207,14 @@ describe("earshot run --format orca", () => {
       const lines = r.trim().split("\n");
       expect(lines).toHaveLength(3);
       expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
-      expect(lines[1]).toMatch(/-flow\.html" title="Flow"/);
+      expect(lines[1]).toMatch(/-explain\.html" title="Explain"/);
       expect(lines[2]).toMatch(/^\[Listen\]\(/);
-      const flow = readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-flow.html"))!), "utf8");
-      expect(flow).toContain("Mailer broke");
-      expect(flow).toContain("Guard fixed");
-      expect(flow).toContain("#B42318");
-      expect(flow).not.toContain("decodeAudioData");
+      const page = readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-explain.html"))!), "utf8");
+      expect(page).toContain("Retries now stop at five");
+      expect(page).not.toContain("decodeAudioData");
+      expect(page).not.toContain("html.ios");
       const player = readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-player.html"))!), "utf8");
-      expect(player).not.toContain("<svg");
+      expect(player).not.toContain("Retries now stop at five");
     } finally {
       p.server.close();
       rmSync(d2, { recursive: true, force: true });

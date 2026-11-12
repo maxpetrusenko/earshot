@@ -1,0 +1,6 @@
+{
+  "name": "orca-player",
+  "out": "explain-orca-player",
+  "expect": "visual",
+  "reply": "Shipped the Orca player rework. The old Orca output was one combined page: the player and the diagram together in a single frame. It is now two separate visuals. The player is a compact control bar with Play, Original, a seek bar, back and forward ten seconds, a speed button that cycles 1x to 2x, and elapsed time. The diagram is its own page and only appears for bigger tasks; a small reply gets no image. The player is now on by default when earshot runs inside Orca (format auto), under the reply on the Mac. On iPhone and iPad, Orca cannot tap an inline visual, so the player collapses to nothing there and the reply keeps two markdown links, Listen and Original, as the way to listen. Original is also faster: the two tracks used to be generated one after the other, so Original waited for the edited memo to finish. They now generate in parallel, and the first chunk of each track is sent alone. Measured: first audio of Original dropped from about 6.7 s to about 0.6 s. Both visuals are out in about 10 to 12 s from the reply. The player page is about 212 KB, under Orca's 512 KB limit. Lint, typecheck, build and 150 tests pass."
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { Command } from "commander";
 import { cachedBaseUrl } from "./baseurl.js";
 import { ConfigError, defaultConfigPath, loadConfig } from "./config.js";
@@ -19,8 +19,8 @@ import { ForeignNotifyError, installCodex, uninstallCodex } from "./install/code
 import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install/mcp.js";
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
-import { flowToMermaid } from "./sketch.js";
-import { fitOrcaPage, orcaDir, orcaLine, renderFlowHtml, writeOrcaPage } from "./orca.js";
+import { fitOrcaPage, orcaDir, orcaLine, writeOrcaPage } from "./orca.js";
+import { explainPng } from "./explain-png.js";
 import { readFileInBundle, readMeta } from "./bundle.js";
 import { flushTracing } from "./lib/llm-tracing.js";
 import { dryRun, executeBrief, loadPrepared, NothingUsableError } from "./run.js";
@@ -76,6 +76,8 @@ interface RunFlags {
   title?: string;
   voice?: string;
   sketch: boolean;
+  explain: boolean;
+  explainPng?: boolean;
   audio: boolean;
   json?: boolean;
   format?: string;
@@ -119,7 +121,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   const llm = createLlm(cfg.llm);
   if (flags.dryRun) {
     const ear = await dryRun(cfg, llm, input.text, log);
-    process.stdout.write(`${ear.title}\n\n${ear.script}\n\n${ear.flow ? flowToMermaid(ear.flow).mermaid : ear.mermaid || "sketch: none"}\n`);
+    process.stdout.write(`${ear.title}\n\n${ear.script}\n\n${ear.mermaid || "no diagram"}\n`);
     log(`${ear.words} words, ${ear.retries} retries`);
     return 0;
   }
@@ -130,7 +132,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   if (!orca) out(base, prep.meta.id);
   let result;
   try {
-    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch, noAudio: !flags.audio, waitForAudio: orca, log });
+    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch || !flags.explain, explain: orca, noAudio: !flags.audio, waitForAudio: orca, log });
   } catch (e) {
     if (e instanceof NothingUsableError) {
       err(`earshot: nothing usable was produced: ${e.message}`);
@@ -144,7 +146,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   log(`${meta.status} in ${meta.total_ms}ms (${timings}); bundle ${dir}`);
   log(`time to first audio: ${first}`);
   if (orca) {
-    const line = await orcaOutput(flags.orcaDir, meta.id, base, runStart);
+    const line = await orcaOutput(flags.orcaDir, meta.id, base, runStart, flags.explainPng === true);
     process.stdout.write(`${line}\n`);
   }
   await healthCheck(base);
@@ -152,7 +154,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
 }
 
 /** Orca mode: the inline player line, then the markdown links for the phone. Links only when a page cannot be made. */
-async function orcaOutput(orcaFlag: string | undefined, id: string, base: string, runStart: number): Promise<string> {
+async function orcaOutput(orcaFlag: string | undefined, id: string, base: string, runStart: number, png: boolean): Promise<string> {
   const links = briefLinks(base, id);
   const fallback = (why: string) => {
     log(`orca: ${why}; printing the markdown Listen line`);
@@ -166,14 +168,21 @@ async function orcaOutput(orcaFlag: string | undefined, id: string, base: string
   const original = meta?.tracks?.original.status === "ready" ? readFileInBundle(id, "original.mp3") : null;
   try {
     const t = performance.now();
-    const svg = readFileInBundle(id, "sketch.svg")?.toString("utf8");
+    const explainHtml = readFileInBundle(id, "explain.html")?.toString("utf8") ?? null;
     const fit = await fitOrcaPage(edited, original, { editedSeconds: meta?.tracks?.edited.duration_s ?? undefined, originalSeconds: meta?.tracks?.original.duration_s ?? undefined });
     log(`orca encode ${Math.round(performance.now() - t)}ms`);
     const file = writeOrcaPage(dir, id, fit.html, "player");
-    // The diagram is its own page, and only a multi-part task has one.
-    const flow = svg?.includes("<svg") ? writeOrcaPage(dir, id, renderFlowHtml({ title: meta?.title, svg }), "flow") : null;
-    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; flow ${flow ?? "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
-    return [orcaLine(file), ...(flow ? [orcaLine(flow, "Flow")] : []), listenMarkdown(links)].join("\n");
+    // The explain page is its own display-only visual, and only a change worth a picture has one.
+    const explain = explainHtml ? writeOrcaPage(dir, id, explainHtml, "explain") : null;
+    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; explain ${explain ?? "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
+    if (explain && png) {
+      try {
+        log(`explain png ${await explainPng(explainHtml!, join(dir, explain.replace(/\.html$/, ".png")))}`);
+      } catch (e) {
+        log(`explain png failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return [orcaLine(file), ...(explain ? [orcaLine(explain, "Explain")] : []), listenMarkdown(links)].join("\n");
   } catch (e) {
     return fallback(e instanceof Error ? e.message : String(e));
   }
@@ -209,7 +218,9 @@ program
   .option("--detach", "print the link now and finish the memo in a background process")
   .option("--title <text>", "override the generated title")
   .option("--voice <name>", "override tts.voice")
-  .option("--no-sketch", "skip the sketch")
+  .option("--no-sketch", "skip every picture (same as --no-explain)")
+  .option("--no-explain", "skip the visual explanation page")
+  .option("--explain-png", "also render the explanation as a 1080x1350 PNG next to the page (needs playwright and a Chromium)")
   .option("--no-audio", "skip the audio")
   .option("--json", "same as --format json")
   .option("--format <format>", "text (one markdown line: [Listen](...) · [Original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) orca (wait for the audio, write an inline player page for Orca chat, print the ::orca-visual line, then the links) or auto (orca when ORCA_CHAT_SCRATCH_DIR is writable, else links at once)")
