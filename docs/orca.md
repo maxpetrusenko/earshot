@@ -45,16 +45,14 @@ tts:
   original_base_url: http://<addr>:8883/v1
 ```
 
-Measured on a 1.2 KB reply (Claude `sonnet` script, Kokoro on a 10-core Mac mini):
+Measured through the skill's command (`earshot run --format auto`, short style, Claude script, Kokoro on a Mac mini with a second instance for the original), on a 0.4 KB reply, two runs:
 
-| Setup | Time to the `::orca-visual` line |
+| Run | Time from reply in to both lines out |
 |---|---|
-| inline, one Kokoro, chunks in sequence | 33 s |
-| inline, one Kokoro, chunks in parallel | 24 s |
-| inline, two Kokoro instances, one encode | 17 s |
-| stream | 0.03 s |
+| 1 | 7.0 s |
+| 2 | 11.1 s |
 
-The script from the model takes about 6 s of that; the rest is speech synthesis.
+Run 2 broke down as script 9.5 s (the LLM, which varies), original speech 4.5 s in parallel, edited speech finishing 1.2 s after the script, page encode 0.15 s. The page was 212 KB.
 
 ## Limits
 
