@@ -1,5 +1,5 @@
 {
-  "name": "earshot",
+  "name": "@maxpetrusenko/earshot",
   "version": "1.0.0",
   "description": "Hear what your coding agent did: ear-first voice memos and glance diagrams for Claude Code, Codex and MCP.",
   "type": "module",
@@ -46,6 +46,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
