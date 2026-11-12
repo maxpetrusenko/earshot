@@ -1,0 +1,9 @@
+Fixed the checkout that charged some customers twice. Root cause: the payment webhook handler and the nightly reconcile job both called the charge service, and the charge service had no idempotency check, so a retried webhook after a slow response created a second charge.
+
+How the parts connect: the storefront creates the order, the payment provider sends a webhook to the handler, the handler asks the charge service to capture, and the reconcile job later asks the same service to capture any order still marked pending. The charge service writes to the ledger.
+
+What I changed: the charge service now takes an idempotency key built from the order and attempt, and refuses a second capture for the same key. The webhook handler and the reconcile job both pass the key. I added a ledger unique constraint as a second guard.
+
+Verification: replayed last week's retried webhooks against staging and got exactly one charge per order. All 318 tests pass and typecheck is clean.
+
+Not done: the 23 customers already charged twice still need refunds. That is a support decision.

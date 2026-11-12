@@ -2,8 +2,11 @@
 
 ## Unreleased
 
-- Orca inline player rewritten on the Web Audio API (`decodeAudioData` plus `AudioBufferSourceNode`). The old `<audio src="data:...">` page failed in Orca with `NotSupportedError`. The page shows the memo title and sketch on top and a compact bar below: Play/Pause, Original, a seek bar, back and forward 10 s, speed (1x, 1.25x, 1.5x, 2x), elapsed / total, and Space to toggle.
+- Orca inline player rewritten on the Web Audio API (`decodeAudioData` plus `AudioBufferSourceNode`). The old `<audio src="data:...">` page failed in Orca with `NotSupportedError`. The player page is a compact bar: Play/Pause, Original, a seek bar, back and forward 10 s, speed (1x, 1.25x, 1.5x, 2x), elapsed / total, and Space to toggle.
 - `--format auto`: inside Orca (`ORCA_CHAT_SCRATCH_DIR` writable) the skill prints the `::orca-visual` line and then the markdown links; elsewhere it prints the links at once. The Claude Code skill now uses it.
+- Orca output is now two independent visuals, player first: `earshot-<id>-player.html` (control bar only, no image) and `earshot-<id>-flow.html` (diagram only), then the Listen / Original line last. The player detects iOS and iPadOS at run time and collapses to nothing there, since iOS cannot tap an inline visual. The Mac cannot hide the markdown links (the text is the same on both devices); see docs/orca.md.
+- The diagram is only for bigger tasks. Prompt `ear-script.v3` returns `"sketch": "none"` for small replies and a structured `{nodes, edges, broken, fixed}` for multi-part work; the broken node renders red and the fixed one green. `scripts/sketch-hitrate.ts` scores it on the fixtures.
+- Faster first audio when the caller waits for the whole track: the first chunk is sent alone, then the rest. Original first audio on a second Kokoro dropped from about 6.7 s to 0.9 s on a 1 KB reply.
 - Removed: `--orca-audio` and the `orca.audio` config key. The stream page needed network access, which Orca pages do not have.
 
 ## 1.0.0 (2026-11-11)

@@ -62,6 +62,8 @@ export class TrackWriter {
   private format: string | null = null;
   private seconds = 0;
   private readonly synth: Synth;
+  /** Settles when chunk 0 has its audio (or failed): in parallel mode later chunks wait for it, so the first audio is not queued behind its siblings on a one-at-a-time server. */
+  private firstDone: Promise<unknown> | null = null;
 
   constructor(private readonly o: TrackOptions) {
     this.synth = o.synth ?? synthesize;
@@ -74,9 +76,18 @@ export class TrackWriter {
   add(text: string): void {
     if (this.failed || !text.trim()) return;
     const index = this.n++;
-    const early = this.o.parallel ? this.speak(text) : null;
+    const early = this.o.parallel ? this.speakParallel(index, text) : null;
     early?.catch(() => undefined); // a failure is raised when the queue reaches this chunk
     this.queue = this.queue.then(() => this.chunk(index, text, early)).catch((e) => this.fail(errMsg(e)));
+  }
+
+  private speakParallel(index: number, text: string): Promise<TtsResult> {
+    if (index === 0) {
+      const p = this.speak(text);
+      this.firstDone = p.catch(() => undefined);
+      return p;
+    }
+    return (this.firstDone ?? Promise.resolve()).then(() => this.speak(text));
   }
 
   private async speak(text: string): Promise<TtsResult> {

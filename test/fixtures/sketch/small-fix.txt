@@ -1,0 +1,1 @@
+Fixed the typo in the signup button label: it said "Sing up" and now says "Sign up". One line in the header component. I checked the page in the browser and the label reads correctly. No tests needed a change.

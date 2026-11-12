@@ -8,6 +8,8 @@ export interface FieldHandlers {
   delta?: (key: string, text: string) => void;
   /** A string value, complete. */
   field?: (key: string, value: string) => void;
+  /** A non-string value (object, array, number, literal), complete, as its raw JSON text. */
+  other?: (key: string, json: string) => void;
 }
 
 type State = "seek" | "key" | "keyEnd" | "colon" | "value" | "string" | "skip";
@@ -23,11 +25,18 @@ export class JsonFieldStream {
   private depth = 0;
   private skipStr = false;
   private skipEsc = false;
+  private skipBuf = "";
   /** Everything fed so far (for a fallback parse when no field was seen). */
   raw = "";
   fields = 0;
 
   constructor(private readonly h: FieldHandlers) {}
+
+  private endSkip(): void {
+    const json = this.skipBuf.trim();
+    this.skipBuf = "";
+    if (json) this.h.other?.(this.key, json);
+  }
 
   push(chunk: string): void {
     this.raw += chunk;
@@ -70,6 +79,7 @@ export class JsonFieldStream {
             this.depth = c === "{" || c === "[" ? 1 : 0;
             this.skipStr = false;
             this.skipEsc = false;
+            this.skipBuf = c;
           }
           break;
         case "string": {
@@ -105,9 +115,18 @@ export class JsonFieldStream {
           } else if (c === '"') this.skipStr = true;
           else if (c === "{" || c === "[") this.depth++;
           else if (c === "}" || c === "]") {
-            if (this.depth === 0) this.state = "seek";
-            else this.depth--;
-          } else if (c === "," && this.depth === 0) this.state = "keyEnd";
+            if (this.depth === 0) {
+              this.endSkip();
+              this.state = "seek";
+              break;
+            }
+            this.depth--;
+          } else if (c === "," && this.depth === 0) {
+            this.endSkip();
+            this.state = "keyEnd";
+            break;
+          }
+          this.skipBuf += c;
           break;
       }
     }
