@@ -26,7 +26,7 @@ pnpm link --global      # puts `earshot` on your PATH
 earshot init            # writes ~/.config/earshot/config.yaml
 ```
 
-After the first npm release, `npm i -g earshot` will also work.
+Or install from npm: `npm i -g @maxpetrusenko/earshot`, or run once with `npx @maxpetrusenko/earshot`.
 
 A minimal `~/.config/earshot/config.yaml`:
 
