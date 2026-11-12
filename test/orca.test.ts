@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -12,27 +12,42 @@ const fakeEnc: Reencode = async (mp3, kbps) => Buffer.alloc(Math.round((mp3.leng
 const src = (n: number) => Buffer.alloc(n * 1000, 2);
 
 describe("renderOrcaHtml", () => {
-  const html = renderOrcaHtml({ edited: "data:audio/mpeg;base64,AAAA", original: "data:audio/mpeg;base64,BBBB" });
-  it("has two buttons and two audio elements that preload", () => {
-    expect(html).toContain('id="be"');
-    expect(html).toContain('id="bo"');
-    expect(html.match(/<audio /g)).toHaveLength(2);
-    expect(html).toContain('preload="auto"');
+  const svg = '<svg viewBox="0 0 10 10"><script>bad()</script><rect width="5" height="5" onclick="x()"/></svg>';
+  const html = renderOrcaHtml({ edited: "AAAA", original: "BBBB", title: "Fixed <retries>", svg });
+  it("uses Web Audio and no audio element or media data URL", () => {
+    expect(html).not.toMatch(/<audio/i);
+    expect(html).not.toContain("data:audio");
+    expect(html).toContain("decodeAudioData");
+    expect(html).toContain("createBufferSource");
+    expect(html).toContain('{e:"AAAA",o:"BBBB"}');
+  });
+  it("has the compact bar: play, original, seek, skip, speed, time", () => {
+    for (const id of ["be", "bo", "sk", "bk", "fw", "sp", "tm", "st"]) expect(html).toContain(`id="${id}"`);
+    expect(html).toContain("font-size:13px;padding:6px 12px");
+    expect(html).toContain("max-height:220px");
+    expect(html.indexOf('class="ti"')).toBeLessThan(html.indexOf('class="bar"'));
+    expect(html.indexOf('class="sk"')).toBeLessThan(html.indexOf('class="bar"'));
+  });
+  it("sanitizes the sketch and escapes the title", () => {
+    expect(html).toContain("<rect");
+    expect(html).not.toContain("bad()");
+    expect(html.match(/<div class="sk">[\s\S]*?<\/svg>/)![0]).not.toContain("onclick");
+    expect(html).toContain("Fixed &lt;retries&gt;");
   });
   it("reads theme tokens with fallbacks and never redefines one", () => {
     const vars = html.match(/var\(--[a-z-]+[^)]*\)/g) ?? [];
-    expect(vars.length).toBeGreaterThan(3);
+    expect(vars.length).toBeGreaterThan(6);
     for (const v of vars) expect(v).toMatch(/,/);
     expect(html).not.toMatch(/(^|[;{\s])--[a-z-]+\s*:/m);
     expect(html).not.toContain(":root");
   });
-  it("uses no 100vh and makes no network request", () => {
+  it("uses no 100vh, no emoji and makes no network request", () => {
     expect(html).not.toMatch(/100\s*vh/);
-    expect(html).not.toMatch(/fetch\(|XMLHttpRequest|https?:\/\//);
+    expect(html).not.toMatch(/fetch\(|XMLHttpRequest|https?:\/\/(?!www\.w3\.org)/);
+    expect(html).not.toMatch(/\p{Extended_Pictographic}/u);
   });
-  it("escapes the note and the audio sources", () => {
-    const h = renderOrcaHtml({ edited: 'x"><script>bad()</script>', original: null, note: "<img src=x onerror=1> & more" });
-    expect(h).not.toContain("<script>bad()");
+  it("omits Original and shows the note when the original is dropped; escapes the note", () => {
+    const h = renderOrcaHtml({ edited: "AAAA", original: null, note: "<img src=x onerror=1> & more" });
     expect(h).not.toContain("<img src=x");
     expect(h).toContain("&lt;img src=x onerror=1&gt; &amp; more");
     expect(h).not.toContain('id="bo"');
@@ -62,6 +77,12 @@ describe("fitOrcaPage", () => {
     expect(f.html).not.toContain('id="bo"');
     expect(f.bytes).toBeLessThanOrEqual(ORCA_BUDGET_BYTES);
   });
+  it("counts the sketch against the budget", async () => {
+    const svg = `<svg viewBox="0 0 10 10"><text>${"x".repeat(60000)}</text></svg>`;
+    const f = await fitOrcaPage(src(100), src(100), { reencode: fakeEnc, svg, title: "T" });
+    expect(f.bytes).toBeLessThanOrEqual(ORCA_BUDGET_BYTES);
+    expect(f.html).toContain("xxxxxxxx");
+  });
   it("throws when the edited track alone is over budget", async () => {
     await expect(fitOrcaPage(src(5000), null, { reencode: fakeEnc })).rejects.toThrow(/over the/);
   });
@@ -75,7 +96,7 @@ describe("fitOrcaPage", () => {
   it("encodes real audio under the budget with ffmpeg", async () => {
     const f = await fitOrcaPage(fakeMp3(200), fakeMp3(200));
     expect(f.bytes).toBeLessThan(ORCA_BUDGET_BYTES);
-    expect(f.html).toContain("data:audio/mpeg;base64,");
+    expect(f.html).not.toContain("<audio");
   });
 });
 
@@ -95,15 +116,15 @@ describe("orca helpers", () => {
     expect(hasOrcaLine('::orca-visual{file="chart.html" title="x"}')).toBe(false);
     expect(hasOrcaLine("")).toBe(false);
   });
-  it("config accepts orca.audio and tts.original_base_url, and rejects other values", () => {
-    expect(parseConfig("").orca.audio).toBe("inline");
-    expect(parseConfig("orca:\n  audio: stream\ntts:\n  original_base_url: http://x/v1\n")).toMatchObject({ orca: { audio: "stream" }, tts: { original_base_url: "http://x/v1" } });
-    expect(() => parseConfig("orca:\n  audio: both\n")).toThrow();
+  it("config accepts tts.original_base_url", () => {
+    expect(parseConfig("tts:\n  original_base_url: http://x/v1\n")).toMatchObject({ tts: { original_base_url: "http://x/v1" } });
   });
-  it("the Stop hook skips a reply that already has the Orca player line", async () => {
+  it("the Stop hook treats either line as already narrated", async () => {
     const long = "word ".repeat(120);
-    const reply = `${long}\n${orcaLine("earshot-AbC123.html")}`;
-    expect(await decide({ last_assistant_message: reply }, parseConfig(""))).toMatchObject({ narrate: false, reason: expect.stringMatching(/Orca player line/) });
+    const visual = `${long}\n${orcaLine("earshot-AbC123.html")}`;
+    expect(await decide({ last_assistant_message: visual }, parseConfig(""))).toMatchObject({ narrate: false, reason: expect.stringMatching(/Orca player line/) });
+    const links = `${long}\n[Listen](http://h/b/AbC123AbC123AbC1/edited.mp3) \u00b7 [Original](http://h/b/AbC123AbC123AbC1/original.mp3)`;
+    expect(await decide({ last_assistant_message: links }, parseConfig(""))).toMatchObject({ narrate: false, reason: expect.stringMatching(/earshot link/) });
   });
 });
 
@@ -139,15 +160,24 @@ describe("earshot run --format orca", () => {
       child.stdin.end(report);
     });
 
-  it("waits for the audio, writes an inline page under 512 KB and prints one ::orca-visual line", async () => {
+  it("waits for the audio, writes an inline page under 512 KB and prints the visual line then the links", async () => {
     const r = await run(["--format", "orca"], { ORCA_CHAT_SCRATCH_DIR: dir });
     expect(r.status).toBe(0);
-    expect(r.stdout).toMatch(/^::orca-visual\{file="earshot-[A-Za-z0-9]{16}\.html" title="Listen"\}\n$/);
+    expect(r.stdout).toMatch(/^::orca-visual\{file="earshot-[A-Za-z0-9]{16}\.html" title="Listen"\}\n\[Listen\]\(http:\/\/localhost:17778\/b\/[A-Za-z0-9]{16}\/edited\.mp3\) \u00b7 \[Original\]\(\S+\/original\.mp3\)\n$/);
     const file = readdirSync(dir).find((f) => f.startsWith("earshot-"))!;
-    expect(statSync(join(dir, file)).size).toBeLessThan(512 * 1024);
+    expect(statSync(join(dir, file)).size).toBeLessThan(ORCA_BUDGET_BYTES);
     const html = readFileSync(join(dir, file), "utf8");
-    expect(html.match(/src="data:audio\/mpeg;base64,/g)).toHaveLength(2);
+    expect(html).not.toContain("<audio");
+    expect(html).toContain("decodeAudioData");
     expect(r.stderr).toMatch(/ms from start to line/);
+  });
+  it("auto prints both lines in Orca and only the links outside it", async () => {
+    const inOrca = await run(["--format", "auto"], { ORCA_CHAT_SCRATCH_DIR: dir });
+    expect(inOrca.stdout.split("\n").filter(Boolean)).toHaveLength(2);
+    expect(inOrca.stdout).toMatch(/^::orca-visual/);
+    const outside = await run(["--format", "auto"]);
+    expect(outside.stdout.trim().split("\n")).toHaveLength(1);
+    expect(outside.stdout).toMatch(/^\[Listen\]\(/);
   });
   it("falls back to the markdown Listen line when ORCA_CHAT_SCRATCH_DIR is unset", async () => {
     const r = await run(["--format", "orca"]);
@@ -157,18 +187,6 @@ describe("earshot run --format orca", () => {
   it("falls back when the directory is not writable", async () => {
     const r = await run(["--format", "orca"], { ORCA_CHAT_SCRATCH_DIR: join(dir, "nope") });
     expect(r.stdout).toMatch(/^\[Listen\]\(/);
-  });
-  it("stream mode prints the line at once and the page links the served MP3s", async () => {
-    const before = new Set(readdirSync(dir));
-    const r = await run(["--format", "orca", "--orca-audio", "stream", "--orca-dir", dir]);
-    expect(r.status).toBe(0);
-    const m = r.stdout.match(/^::orca-visual\{file="(earshot-[A-Za-z0-9]{16}\.html)" title="Listen"\}\n$/);
-    expect(m).not.toBeNull();
-    expect(before.has(m![1]!)).toBe(false);
-    const html = readFileSync(join(dir, m![1]!), "utf8");
-    expect(html).toMatch(/src="http:\/\/localhost:17778\/b\/[A-Za-z0-9]{16}\/edited\.mp3"/);
-    expect(html.length).toBeLessThan(5000);
-    expect(existsSync(join(dir, m![1]!))).toBe(true);
   });
   it("refuses --detach with --format orca", async () => {
     const r = await run(["--format", "orca", "--detach"]);

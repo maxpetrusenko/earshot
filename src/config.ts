@@ -50,8 +50,6 @@ export interface Config {
   privacy: { redact: boolean; max_input_chars: number; evidence_hosts: string[] };
   /** story: a conversational memo (prompt v1); brief: the terse v0 memo. */
   script: { style: ScriptStyle };
-  /** stream: the Orca page links the served MP3s (tiny page, needs the server reachable); inline: audio is embedded as data URLs. */
-  orca: { audio: "stream" | "inline" };
   /** Which Stop events become a memo (hook mode). */
   trigger: { min_chars: number; require_tool_use: boolean; opt_in_tag: boolean };
 }
@@ -82,7 +80,6 @@ export const DEFAULTS: Config = {
   privacy: { redact: true, max_input_chars: 40000, evidence_hosts: [] },
   trigger: { min_chars: 80, require_tool_use: false, opt_in_tag: false },
   script: { style: DEFAULT_STYLE },
-  orca: { audio: "inline" },
 };
 
 export function defaultConfigPath(): string {
@@ -155,7 +152,7 @@ export function parseConfig(text: string): Config {
   }
   if (!isObj(raw)) throw new ConfigError("config: top level must be a mapping");
   for (const k of Object.keys(raw)) {
-    if (!["llm", "tts", "image", "serve", "privacy", "trigger", "script", "orca"].includes(k)) {
+    if (!["llm", "tts", "image", "serve", "privacy", "trigger", "script"].includes(k)) {
       throw new ConfigError(`config: unknown key "${k}"`);
     }
   }
@@ -167,7 +164,6 @@ export function parseConfig(text: string): Config {
   const privacy = section(raw, "privacy", ["redact", "max_input_chars", "evidence_hosts"]);
   const trigger = section(raw, "trigger", ["min_chars", "require_tool_use", "opt_in_tag"]);
   const script = section(raw, "script", ["style"]);
-  const orca = section(raw, "orca", ["audio"]);
 
   const cfg: Config = {
     llm: {
@@ -211,7 +207,6 @@ export function parseConfig(text: string): Config {
       opt_in_tag: pick(trigger, "trigger", "opt_in_tag", d.trigger.opt_in_tag, isBool, "true or false"),
     },
     script: { style: pick(script, "script", "style", d.script.style, oneOf("short", "story", "brief"), "short, story or brief") },
-    orca: { audio: pick(orca, "orca", "audio", d.orca.audio, oneOf("stream", "inline"), "stream or inline") },
   };
   applyTtsProfile(cfg, tts.profiles);
   if (cfg.llm.type === "openai-compatible" && !cfg.llm.base_url) {

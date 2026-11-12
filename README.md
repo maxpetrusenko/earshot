@@ -66,7 +66,7 @@ Tap either word (or open the URL). Audio starts while the memo is still being ma
 |---|---|---|
 | Claude Code, skill | `earshot install claude-code` | Claude ends its reply with one line: Listen · Original |
 | Claude Code, hook | `earshot install claude-code --mode hook` | Stop hook message in the terminal UI |
-| Orca chat (opt-in, desktop only) | `earshot run --format orca` | one `::orca-visual` line renders an inline player; not usable on iOS, see [Orca](docs/orca.md) |
+| Orca chat (default in Orca) | `earshot run --format auto` | an inline Web Audio player on Orca desktop, plus the Listen · Original links for the phone, see [Orca](docs/orca.md) |
 | Codex | `earshot install codex` | `notify` program, link in `~/.earshot/logs/hook.log` |
 | Any MCP client | `earshot install mcp --client claude-code` | the agent calls the `narrate` tool and prints the one-line links |
 | Anything else | `earshot run --from tagged` | reads the last `<narrate>...</narrate>` block from stdin |

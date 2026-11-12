@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Orca inline player rewritten on the Web Audio API (`decodeAudioData` plus `AudioBufferSourceNode`). The old `<audio src="data:...">` page failed in Orca with `NotSupportedError`. The page shows the memo title and sketch on top and a compact bar below: Play/Pause, Original, a seek bar, back and forward 10 s, speed (1x, 1.25x, 1.5x, 2x), elapsed / total, and Space to toggle.
+- `--format auto`: inside Orca (`ORCA_CHAT_SCRATCH_DIR` writable) the skill prints the `::orca-visual` line and then the markdown links; elsewhere it prints the links at once. The Claude Code skill now uses it.
+- Removed: `--orca-audio` and the `orca.audio` config key. The stream page needed network access, which Orca pages do not have.
+
 ## 1.0.0 (2026-11-11)
 
 First stable release.
