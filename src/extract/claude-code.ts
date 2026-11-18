@@ -157,3 +157,13 @@ export function applyTag(text: string, optIn: boolean): string | null {
   if (stripped !== text.trim()) return stripped;
   return optIn ? null : text;
 }
+
+/**
+ * `--session "${CLAUDE_SESSION_ID}"` arrives empty when the variable is unset, or as the literal text when nothing
+ * expanded it. Both mean "no session id", not a bad one; a real but malformed id is still rejected.
+ */
+export function normalizeSession(raw: string | undefined): string | undefined {
+  const v = raw?.trim();
+  if (!v || /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/.test(v)) return undefined;
+  return v;
+}

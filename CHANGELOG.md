@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `--session` now treats an empty value or an unexpanded `${CLAUDE_SESSION_ID}` as no session instead of failing with "--session may contain only letters, digits, - and _". A real but malformed id is still rejected.
 - Explainer v2: up to three concepts per reply (`{"visuals":[...]}`), one page each with its own headline (`explain.html`, `explain2.html`, `explain3.html`), each printed as its own Orca line. Prompts `visual-explainer.v2` and `visual-explainer-format.v2`. New `journey` type, per-panel impact captions, outlined changed controls with arrow notes, a shared timeline scale, and a measured-or-target note on every metric with its source. The gate now rejects sparse panels, panels without a caption, placeholder "Diagram" boxes, and anything below 0.55 visual density. Multi-visual runs no longer crash: the bundle allowlist accepts `explain2.html` and `explain3.html`, and a pipeline crash now prints its stack instead of exiting silently.
 - `scripts/explain-preview.ts` renders a saved or hand-written answer without an LLM and prints density and gate results; `scripts/explain-score.ts` scores screenshots with Opus and exits 2 when the Claude login cannot be used.
 - `examples/`: one reply end to end, with both audio tracks, the edited script, its reasoning, and two explainer pages.

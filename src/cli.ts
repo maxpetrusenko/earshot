@@ -7,7 +7,7 @@ import { ConfigError, defaultConfigPath, loadConfig } from "./config.js";
 import { startDetached } from "./detach.js";
 import { briefLinks, listenLines, listenMarkdown } from "./links.js";
 import { prepareBrief } from "./prepare.js";
-import { extractLastMessage, findTranscript, isSafeSessionId } from "./extract/claude-code.js";
+import { extractLastMessage, findTranscript, isSafeSessionId, normalizeSession } from "./extract/claude-code.js";
 import { extractCodexLast, findCodexSession, isSafeCodexId } from "./extract/codex.js";
 import { extractStdin, normalizeInput } from "./extract/stdin.js";
 import { extractTagged } from "./extract/tagged.js";
@@ -90,6 +90,10 @@ class UsageError extends Error {}
 
 async function runCommand(flags: RunFlags): Promise<number> {
   const runStart = performance.now();
+  if (flags.session !== normalizeSession(flags.session)) {
+    log("ignoring an empty or unexpanded --session value");
+    flags.session = normalizeSession(flags.session);
+  }
   if (flags.session !== undefined && !(flags.from === "codex" ? isSafeCodexId(flags.session) : isSafeSessionId(flags.session))) {
     err("earshot: --session may contain only letters, digits, - and _ (max 80 characters)");
     return 2;
