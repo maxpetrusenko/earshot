@@ -128,6 +128,10 @@ Scrubbing is pattern based. It misses a secret that does not look like one, so k
 
 Every key, with defaults and comments, is in [`config.example.yaml`](config.example.yaml). Unknown keys are an error. Keys never hold secrets, only the name of the environment variable to read.
 
+## Cleaning up briefs
+
+Every memo keeps a folder in `~/.earshot/briefs` (audio, pages, the input). `earshot run` prunes at its start, at most once an hour, and `earshot prune` does it now (`--dry-run` shows what would go). It deletes briefs older than `retention.days` (default 7), then the oldest until the folder is under `retention.max_mb` (default 1024). A brief under an hour old, served in the last hour, or still being made is never deleted, even over the cap.
+
 ## Demo video
 
 The demo in [`video/`](video/README.md) is built with [HyperFrames](https://github.com/heygen-com/hyperframes) from the real card markup and a real Kokoro memo.

@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { Command } from "commander";
 import { cachedBaseUrl } from "./baseurl.js";
-import { ConfigError, defaultConfigPath, loadConfig } from "./config.js";
+import { ConfigError, defaultConfigPath, loadConfig, type Config } from "./config.js";
+import { formatBytes, pruneBriefs, pruneIfDue, stampPruned } from "./prune.js";
 import { startDetached } from "./detach.js";
 import { briefLinks, listenLines, listenMarkdown } from "./links.js";
 import { prepareBrief } from "./prepare.js";
@@ -91,6 +92,16 @@ interface RunFlags {
 
 class UsageError extends Error {}
 
+/** Old briefs go at the start of a run, at most once an hour. A failure here never stops the memo. */
+function autoPrune(cfg: Config): void {
+  try {
+    const r = pruneIfDue(cfg.retention);
+    if (r && r.deleted.length) log(`pruned ${r.deleted.length} old briefs, freed ${formatBytes(r.freedBytes)}`);
+  } catch (e) {
+    log(`prune skipped: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 async function runCommand(flags: RunFlags): Promise<number> {
   const runStart = performance.now();
   if (flags.session !== normalizeSession(flags.session)) {
@@ -102,6 +113,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
     return 2;
   }
   const cfg = loadConfig(flags.config);
+  autoPrune(cfg);
   const input = await readInput(flags, cfg.privacy.max_input_chars);
   if (!input.text) {
     err(flags.from === "tagged" ? "earshot: no <narrate>...</narrate> block in the input." : "earshot: no input. Pipe the agent's output in, or pass --file.");
@@ -223,6 +235,27 @@ program
       err(`earshot: ${e.message}`);
       process.exitCode = 2;
     }
+  });
+
+program
+  .command("prune")
+  .description("delete old briefs from ~/.earshot/briefs: older than retention.days, then the oldest until under retention.max_mb; never a brief under an hour old or still being played, served or made")
+  .option("--days <n>", "keep this many days (default retention.days, 7)", (v) => Number(v))
+  .option("--max-mb <n>", "size cap in MB (default retention.max_mb, 1024)", (v) => Number(v))
+  .option("--dry-run", "show what would be deleted, delete nothing")
+  .option("--config <path>", "alternate config file")
+  .action((o: { days?: number; maxMb?: number; dryRun?: boolean; config?: string }) => {
+    const cfg = loadConfig(o.config);
+    const days = o.days ?? cfg.retention.days;
+    const max_mb = o.maxMb ?? cfg.retention.max_mb;
+    if (!(days > 0) || !(max_mb > 0)) {
+      err("earshot: --days and --max-mb must be positive numbers");
+      process.exitCode = 2;
+      return;
+    }
+    const r = pruneBriefs({ days, max_mb, dryRun: o.dryRun === true });
+    if (!o.dryRun) stampPruned();
+    process.stdout.write(`${o.dryRun ? "would delete" : "deleted"} ${r.deleted.length} briefs, ${o.dryRun ? "would free" : "freed"} ${formatBytes(r.freedBytes)}; ${r.keptCount} kept (${formatBytes(r.bytesAfter)} of ${formatBytes(r.bytesBefore)}), ${r.protectedCount} protected as young, served or in progress\n`);
   });
 
 program

@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { join } from "node:path";
 import { briefDir, readFileInBundle, readMeta, withLegacyTracks, type TrackName } from "./bundle.js";
 import { renderCard } from "./card.js";
+import { markServed } from "./prune.js";
 import { isValidId } from "./lib/id.js";
 import { sweepBrief } from "./sweep.js";
 
@@ -153,6 +154,7 @@ async function streamTrack(req: IncomingMessage, res: ServerResponse, id: string
     if (Date.now() - sweptAt > 5000) {
       sweptAt = Date.now();
       sweepBrief(id);
+      markServed(id);
     }
     await nap(STREAM_POLL_MS);
   }
@@ -193,6 +195,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, assets: Map<str
     return notFound(res, head);
   }
   if (!isValidId(id)) return notFound(res, head);
+  markServed(id); // a brief that is being opened or played is not pruned
 
   // The card polls meta.json, so this is where a dead worker's brief stops showing "pending".
   if (file === undefined || file === "meta.json") sweepBrief(id);
