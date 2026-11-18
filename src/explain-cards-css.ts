@@ -10,8 +10,8 @@ export const CARDS_CSS = `*{box-sizing:border-box}
 body.k-state_key{--bg:#f6f3ec;--eye:#5a4a2c}
 body.k-range_chart{--bg:#edf1f9;--eye:#37507c;--ink:#16223a;--mute:#3f4c66;--line:#c9d3e6}
 body.k-architecture{--bg:#f3f4f6;--eye:#3b4a5e;--line:#cfd4dc}
-html{background:var(--bg);min-height:100%}
-body{margin:0;font-family:${SANS};font-size:16px;line-height:1.35;color:var(--ink);background:radial-gradient(520px 260px at 100% 0,rgba(255,255,255,.7),transparent 70%),var(--bg);min-height:100vh}
+html{background:var(--bg)}
+body{margin:0;font-family:${SANS};font-size:16px;line-height:1.35;color:var(--ink);background:radial-gradient(520px 260px at 100% 0,rgba(255,255,255,.7),transparent 70%),var(--bg)}
 .pg{max-width:560px;margin:0 auto;padding:24px 22px 26px}
 .ey{margin:0 0 14px;font-size:14px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--eye)}
 .ey span,.ct span{opacity:.7;margin:0 3px}

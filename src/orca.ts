@@ -6,6 +6,12 @@ import { join } from "node:path";
 export const ORCA_BUDGET_BYTES = 480_000;
 /** Bitrates tried in order: the first whole page that fits wins. */
 export const ORCA_BITRATES = [24, 20, 16] as const;
+/**
+ * Orca's visual shell (native-chat-visual-shell) sizes the frame from `documentElement.getBoundingClientRect().height`
+ * (plus any body overflow), ignores a height of 0 (the frame then keeps its 160 px default) and clamps what it gets
+ * to at least 80 px. So the page height is the content height, never below 80, and nothing may add to it.
+ */
+export const ORCA_MIN_FRAME_PX = 80;
 
 export type Reencode = (mp3: Buffer, kbps: number) => Promise<Buffer>;
 
@@ -36,9 +42,12 @@ export interface PageInput {
 
 export const b64 = (b: Buffer): string => b.toString("base64");
 
-const PAGE_CSS = `body{margin:0;font-family:var(--font-sans,system-ui);background:var(--background,#fff);color:var(--foreground,#171717)}
-html.ios,html.ios body{display:none;height:0;margin:0;padding:0;overflow:hidden}
-.bar{padding:6px 12px 8px;display:flex;flex-direction:column;gap:6px}
+const PAGE_CSS = `html,body{margin:0;padding:0;height:auto;min-height:0}
+body{font-family:var(--font-sans,system-ui);background:var(--background,#fff);color:var(--foreground,#171717)}
+html.ios,html.ios body{margin:0;padding:0;overflow:hidden}
+html.ios body{height:1px;visibility:hidden}
+html.ios .bar{display:none}
+.bar{box-sizing:border-box;min-height:${ORCA_MIN_FRAME_PX}px;padding:0 12px;display:flex;flex-direction:column;justify-content:center;gap:6px}
 .ctl{display:flex;flex-wrap:nowrap;gap:10px;align-items:center}
 button{font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--border,#ddd);background:var(--secondary,#f4f4f4);color:var(--secondary-foreground,#171717);cursor:pointer}
 #pp{min-width:68px}

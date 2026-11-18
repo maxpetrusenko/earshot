@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, devices, webkit, type Browser, type BrowserType, type Page } from "playwright";
 import { describe, expect, it } from "vitest";
-import { fitOrcaPage } from "../src/orca.js";
+import { fitOrcaPage, ORCA_MIN_FRAME_PX, renderPendingHtml } from "../src/orca.js";
 
 const haveFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 const tone = (hz: number, seconds: number): Buffer =>
@@ -139,14 +139,14 @@ describe.skipIf(!haveFfmpeg)("player page device handling in headless WebKit", (
     }
   }, 60000);
 
-  it("iPhone profile: renders nothing and collapses to zero height", async () => {
+  it("iPhone profile: renders nothing and reports a 1 px height", async () => {
     const r = await load({ ...devices["iPhone 13"] });
     if (!r) return;
     try {
       expect(await r.page.evaluate(() => navigator.userAgent)).toMatch(/iPhone/);
       expect(await r.page.evaluate(() => document.documentElement.className)).toBe("ios");
       expect(await r.page.isVisible("#pp")).toBe(false);
-      expect(await height(r.page)).toBe(0);
+      expect(await height(r.page)).toBe(1); // Orca ignores a height of 0 and would keep its 160 px default frame
       expect(await r.page.evaluate(() => document.getElementById("tm")!.textContent)).toBe("0:00 / 0:00"); // audio never decoded
     } finally {
       await r.browser.close();
@@ -161,10 +161,76 @@ describe.skipIf(!haveFfmpeg)("player page device handling in headless WebKit", (
     if (!r) return;
     try {
       expect(await r.page.evaluate(() => document.documentElement.className)).toBe("ios");
-      expect(await height(r.page)).toBe(0);
+      expect(await height(r.page)).toBe(1); // Orca ignores a height of 0 and would keep its 160 px default frame
     } finally {
       await r.browser.close();
       rmSync(r.dir, { recursive: true, force: true });
+    }
+  }, 60000);
+});
+
+/**
+ * Orca reads `documentElement.getBoundingClientRect().height` (plus body overflow) and clamps it to at least 80 px;
+ * its own base CSS is `html{font-size:14px;line-height:1.5}body{margin:0}`. The page must be exactly that tall in a
+ * viewport much taller than the row, which is what an `html{min-height}` or a body `100vh` would break.
+ */
+describe.skipIf(!haveFfmpeg)("player page fits the Orca frame", () => {
+  const ORCA_BASE = "html{font-size:14px;line-height:1.5}body{margin:0}";
+  const measure = (page: Page) =>
+    page.evaluate(() => {
+      const body = document.body;
+      let h = document.documentElement.getBoundingClientRect().height;
+      if (body.scrollHeight > body.clientHeight) h += body.scrollHeight - body.clientHeight;
+      const row = (document.querySelector(".ctl") ?? document.body).getBoundingClientRect();
+      const cs = getComputedStyle(body);
+      return { h: Math.ceil(h), minHeight: cs.minHeight, margin: cs.margin, rowMid: row.top + row.height / 2, rowH: row.height };
+    });
+
+  for (const [name, type] of engines) {
+    it(`${name}: frame height is the row height (floor 80), in a tall viewport, for player and stand-in`, async () => {
+      const f = await fitOrcaPage(tone(440, 5), tone(660, 5));
+      const browser = await type.launch().catch(() => null);
+      if (!browser) return;
+      const dir = mkdtempSync(join(tmpdir(), "orca-fit-"));
+      try {
+        for (const html of [f.html, renderPendingHtml("player", { reload: false })]) {
+          const page = await browser.newPage({ viewport: { width: 520, height: 700 } });
+          await page.setContent(html);
+          await page.addStyleTag({ content: ORCA_BASE });
+          const m = await measure(page);
+          expect(m.h).toBe(ORCA_MIN_FRAME_PX);
+          expect(m.minHeight).toBe("0px");
+          expect(m.margin).toBe("0px");
+          if (html === f.html) {
+            expect(Math.abs(m.rowMid - ORCA_MIN_FRAME_PX / 2)).toBeLessThanOrEqual(1); // the row sits in the middle, not the top
+            if (process.env.EARSHOT_PLAYER_PNG && name === "chromium") {
+              await page.locator("body").screenshot({ path: process.env.EARSHOT_PLAYER_PNG });
+            }
+          }
+          await page.close();
+        }
+        writeFileSync(join(dir, "ok"), "");
+      } finally {
+        await browser.close();
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }, 60000);
+  }
+
+  it("a status message grows the frame instead of overflowing it", async () => {
+    const f = await fitOrcaPage(tone(440, 5), null);
+    const browser = await chromium.launch().catch(() => null);
+    if (!browser) return;
+    try {
+      const page = await browser.newPage({ viewport: { width: 520, height: 700 } });
+      await page.setContent(f.html);
+      await page.addStyleTag({ content: ORCA_BASE });
+      await page.evaluate(() => { document.getElementById("st")!.textContent = "Audio error: NotSupportedError something went wrong while decoding"; });
+      const m = await measure(page);
+      expect(m.h).toBeGreaterThanOrEqual(ORCA_MIN_FRAME_PX);
+      expect(m.h).toBeLessThan(ORCA_MIN_FRAME_PX + 40);
+    } finally {
+      await browser.close();
     }
   }, 60000);
 });

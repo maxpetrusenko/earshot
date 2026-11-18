@@ -81,7 +81,8 @@ describe("renderPlayerHtml", () => {
   it("detects iOS and iPadOS and collapses to nothing there", () => {
     expect(html).toContain("iPhone|iPad|iPod");
     expect(html).toContain("maxTouchPoints>1");
-    expect(html).toContain("html.ios,html.ios body{display:none;height:0");
+    expect(html).toContain("html.ios body{height:1px;visibility:hidden}");
+    expect(html).toContain("html.ios .bar{display:none}");
     expect(html.indexOf("maxTouchPoints")).toBeLessThan(html.indexOf("<body"));
     expect(html).toContain("if(document.documentElement.className!=='ios'){const A=");
   });
