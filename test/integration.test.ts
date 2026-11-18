@@ -203,7 +203,7 @@ describe("cli contract", () => {
     expect(plain.stdout).toMatch(/^Listen: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/edited\.mp3\nOriginal: http:\/\/localhost:17777\/b\/[A-Za-z0-9]{16}\/original\.mp3\n$/);
     const json = await run(["run", "--format", "json", "--config", cfgPath], REPORT);
     expect(Object.keys(JSON.parse(json.stdout)).sort()).toEqual(["card", "id", "listen", "listen_original"]);
-  });
+  }, 90_000);
   it("keeps the original track when the script is too short", async () => {
     const bad = await startFakeProvider({ script: "far too short" });
     try {

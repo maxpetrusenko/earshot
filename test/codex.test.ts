@@ -256,8 +256,11 @@ describe("codex installer (temp CODEX_HOME only)", () => {
 });
 
 describe("run --from codex / tagged through the CLI", () => {
+  // No ~/.config/earshot/config.yaml on a clean machine (CI): point the default config at an empty one.
+  const emptyCfg = join(mkdtempSync(join(tmpdir(), "earshot-defcfg-")), "config.yaml");
+  writeFileSync(emptyCfg, "");
   const cli = (args: string[], input?: string, cfg?: string) =>
-    spawnSync("node", [join(ROOT, "dist", "cli.js"), ...args, ...(cfg ? ["--config", cfg] : [])], { input, encoding: "utf8", env: { ...process.env, NODE_USE_ENV_PROXY: "" } });
+    spawnSync("node", [join(ROOT, "dist", "cli.js"), ...args, ...(cfg ? ["--config", cfg] : [])], { input, encoding: "utf8", env: { ...process.env, NODE_USE_ENV_PROXY: "", EARSHOT_CONFIG: emptyCfg } });
 
   it("needs an explicit session id and rejects unsafe ones", () => {
     const a = cli(["run", "--from", "codex"], "");
