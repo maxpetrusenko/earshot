@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { Config } from "./config.js";
 import { earshotHome } from "./config.js";
 import { recordWorker } from "./bundle.js";
+import { writeOrcaPlaceholders } from "./orca-output.js";
 import { prepareBrief, type Prepared } from "./prepare.js";
 
 export const logsDir = () => join(earshotHome(), "logs");
@@ -27,14 +28,16 @@ export interface Detached {
  * stdio is a log file and the child is unref'd, so the caller (a Stop hook) can exit at once:
  * Claude Code waits for EOF on a hook's stdout and stderr, which a child holding them would delay.
  */
-export function startDetached(cfg: Config, raw: string, o: { from: string; session?: string; title?: string; evidence?: string; configPath?: string; log?: (l: string) => void }): Detached {
+export function startDetached(cfg: Config, raw: string, o: { from: string; session?: string; title?: string; evidence?: string; configPath?: string; orca?: { dir: string; explain: boolean; png: boolean }; log?: (l: string) => void }): Detached {
   const prepared = prepareBrief(cfg, raw, o);
+  // The stand-in pages exist before the worker starts, so a fast worker can never be overwritten by them.
+  if (o.orca) writeOrcaPlaceholders(o.orca.dir, prepared.meta.id, o.orca.explain);
   mkdirSync(logsDir(), { recursive: true, mode: 0o700 });
   const log = join(logsDir(), `${prepared.meta.id}.log`);
   const fd = openSync(log, "a", 0o600);
   const [bin, ...args] = cliCommand() as [string, ...string[]];
   try {
-    const child = spawn(bin, [...args, "worker", prepared.meta.id, ...(o.title ? [`--title=${o.title}`] : []), ...(o.configPath ? ["--config", o.configPath] : [])], {
+    const child = spawn(bin, [...args, "worker", prepared.meta.id, ...(o.title ? [`--title=${o.title}`] : []), ...(o.orca ? ["--orca-dir", o.orca.dir, ...(o.orca.explain ? ["--orca-explain"] : []), ...(o.orca.png ? ["--explain-png"] : [])] : []), ...(o.configPath ? ["--config", o.configPath] : [])], {
       detached: true,
       stdio: ["ignore", fd, fd],
       env: process.env,

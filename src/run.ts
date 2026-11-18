@@ -25,6 +25,10 @@ export interface RunOptions {
   noAudio?: boolean;
   /** The caller waits for both finished tracks, so synthesize chunks in parallel and do not hold the original back. */
   waitForAudio?: boolean;
+  /** Called once both audio tracks have settled, before the explain page is awaited: the Orca worker writes the player here. */
+  onAudioReady?: () => Promise<void>;
+  /** Called when the explain stage ends: its page, or null when there is no image. */
+  onExplain?: (htmls: string[]) => Promise<void>;
   log?: (line: string) => void;
 }
 
@@ -163,11 +167,15 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
     const explainJob: Promise<void> =
       opts.explain && !opts.noSketch && cfg.image.type !== "none"
         ? stage(stages, "explain", log, () => buildExplain(llm, clean(text))).then(
-            (r) => {
+            async (r) => {
               r.visuals.forEach((v, i) => writeFileInBundle(id, i === 0 ? "explain.html" : `explain${i + 1}.html`, v.html));
               if (r.visuals.length === 0) log(`explain: no image (${r.reason})`);
+              await opts.onExplain?.(r.visuals.map((v) => v.html)).catch((e) => log(`explain hook failed: ${errMsg(e)}`));
             },
-            (e) => void failures.push(`explain: ${errMsg(e)}`),
+            async (e) => {
+              failures.push(`explain: ${errMsg(e)}`);
+              await opts.onExplain?.([]).catch((e) => log(`explain hook failed: ${errMsg(e)}`));
+            },
           )
         : Promise.resolve();
 
@@ -225,7 +233,9 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
       editedW?.fail(errMsg(e));
       failures.push(`edited: ${errMsg(e)}`);
     }
-    await Promise.all([originalDone, sketchJob, explainJob]);
+    await originalDone;
+    if (opts.onAudioReady) await opts.onAudioReady().catch((e) => log(`audio-ready hook failed: ${errMsg(e)}`));
+    await Promise.all([sketchJob, explainJob]);
 
     const disk = readMeta(id);
     const originalReady = !audioOn ? false : disk?.tracks?.original.status === "ready";

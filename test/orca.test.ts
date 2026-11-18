@@ -6,11 +6,58 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseConfig } from "../src/config.js";
 import { decide } from "../src/hook/claude-code.js";
 import { EXPLAIN_SPEC } from "./explain-fixtures.js";
-import { escapeHtml, fitOrcaPage, hasOrcaLine, orcaDir, orcaLine, predictPageBytes, renderPlayerHtml, ORCA_BUDGET_BYTES, type Reencode } from "../src/orca.js";
+import { escapeHtml, fitOrcaPage, hasOrcaLine, orcaDir, orcaLine, predictPageBytes, renderPendingHtml, renderPlayerHtml, writeOrcaPage, ORCA_BUDGET_BYTES, type Reencode } from "../src/orca.js";
+import { orcaLines } from "../src/orca-output.js";
 import { fakeMp3, startFakeProvider } from "./helpers.js";
 
 const fakeEnc: Reencode = async (mp3, kbps) => Buffer.alloc(Math.round((mp3.length * kbps) / 128), 1);
 const src = (n: number) => Buffer.alloc(n * 1000, 2);
+const until = async (fn: () => boolean, ms = 30000) => {
+  const t = Date.now();
+  while (Date.now() - t < ms) {
+    if (fn()) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+};
+const playerOf = (dir: string) => join(dir, readdirSync(dir).find((f) => f.endsWith("-player.html"))!);
+
+describe("pending pages", () => {
+  it("the player stand-in says it is preparing, reloads for a bounded time and collapses on iOS", () => {
+    const html = renderPendingHtml("player", { madeAt: 1000 });
+    expect(html).toContain("Preparing audio");
+    expect(html).toContain("location.reload()");
+    expect(html).toContain("1000<120000");
+    expect(html).toContain("html.ios");
+    expect(html).not.toContain("decodeAudioData");
+  });
+  it("a final note does not reload", () => {
+    const html = renderPendingHtml("player", { reload: false, note: "Audio <failed>" });
+    expect(html).not.toContain("reload");
+    expect(html).toContain("Audio &lt;failed&gt;");
+  });
+  it("the explain stand-in shows nothing", () => {
+    expect(renderPendingHtml("explain", { reload: false })).toContain("display:none");
+  });
+  it("orcaLines prints the player line, the optional explain line, then the links last", () => {
+    expect(orcaLines("abc", "http://h", false).split("\n")).toEqual(['::orca-visual{file="earshot-abc-player.html" title="Listen"}', "[Listen](http://h/b/abc/edited.mp3) \u00b7 [Original](http://h/b/abc/original.mp3)"]);
+    const withExplain = orcaLines("abc", "http://h", true).split("\n");
+    expect(withExplain).toHaveLength(5); // explainer v2 can make up to three pages; unused ones collapse
+    expect(withExplain[1]).toBe('::orca-visual{file="earshot-abc-explain.html" title="Explain"}');
+    expect(withExplain[3]).toBe('::orca-visual{file="earshot-abc-explain3.html" title="Explain"}');
+  });
+  it("writeOrcaPage replaces a file in place and leaves no temp file", () => {
+    const d = mkdtempSync(join(tmpdir(), "earshot-orca-w-"));
+    try {
+      const f = writeOrcaPage(d, "id1", "one");
+      writeOrcaPage(d, "id1", "two");
+      expect(readFileSync(join(d, f), "utf8")).toBe("two");
+      expect(readdirSync(d)).toEqual([f]);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("renderPlayerHtml", () => {
   const html = renderPlayerHtml({ edited: "AAAA", original: "BBBB" });
@@ -168,13 +215,76 @@ describe("earshot run --format orca", () => {
     expect(html).toContain("decodeAudioData");
     expect(r.stderr).toMatch(/ms from start to line/);
   });
-  it("auto prints both lines in Orca and only the links outside it", async () => {
-    const inOrca = await run(["--format", "auto"], { ORCA_CHAT_SCRATCH_DIR: dir });
-    expect(inOrca.stdout.split("\n").filter(Boolean)).toHaveLength(2); // explain none: player line and links
-    expect(inOrca.stdout).toMatch(/^::orca-visual/);
+  it("auto returns at once inside Orca: placeholders and lines now, the real player when the worker is done", async () => {
+    const d = mkdtempSync(join(tmpdir(), "earshot-orca-auto-"));
+    try {
+      const t0 = Date.now();
+      const inOrca = await run(["--format", "auto"], { ORCA_CHAT_SCRATCH_DIR: d });
+      const elapsed = Date.now() - t0;
+      expect(inOrca.status).toBe(0);
+      const lines = inOrca.stdout.split("\n").filter(Boolean);
+      expect(lines).toHaveLength(5); // the report is long enough for explain lines (three stand-ins)
+      expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
+      expect(lines[1]).toMatch(/-explain\.html" title="Explain"/);
+      expect(lines[4]).toMatch(/^\[Listen\]\(/);
+      expect(inOrca.stderr).not.toMatch(/orca encode/); // it did not wait for the audio
+      expect(elapsed).toBeLessThan(15000);
+      // the worker then replaces the stand-in with the finished player
+      expect(await until(() => readdirSync(d).some((f) => f.endsWith("-player.html")) && readFileSync(playerOf(d), "utf8").includes("decodeAudioData"))).toBe(true);
+      const player = readFileSync(playerOf(d), "utf8");
+      expect(player).not.toContain("Preparing audio");
+      expect(statSync(playerOf(d)).size).toBeLessThan(ORCA_BUDGET_BYTES);
+      const explain = join(d, readdirSync(d).find((f) => f.endsWith("-explain.html"))!);
+      expect(await until(() => !readFileSync(explain, "utf8").includes("location.reload()"))).toBe(true); // no image: stays collapsed, stops reloading
+    } finally {
+      await new Promise((r) => setTimeout(r, 300));
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+  it("auto does not print an explain line for a short reply", async () => {
+    const d = mkdtempSync(join(tmpdir(), "earshot-orca-short-"));
+    try {
+      const short = await new Promise<string>((resolve) => {
+        const e: NodeJS.ProcessEnv = { ...process.env, EARSHOT_HOME: home, ORCA_CHAT_SCRATCH_DIR: d };
+        for (const k of ["NODE_USE_ENV_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"]) delete e[k];
+        const child = spawn("npx", ["tsx", "src/cli.ts", "run", "--config", cfgPath, "--format", "auto"], { env: e, cwd: join(import.meta.dirname, "..") });
+        let out = "";
+        child.stdout.on("data", (x) => (out += x));
+        child.on("close", () => resolve(out));
+        child.stdin.end("Fixed the flaky webhook retries. 212 tests pass.");
+      });
+      expect(short.trim().split("\n")).toHaveLength(2);
+      expect(await until(() => readFileSync(playerOf(d), "utf8").includes("decodeAudioData"))).toBe(true);
+    } finally {
+      await new Promise((r) => setTimeout(r, 300));
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+  it("auto outside Orca prints only the links at once", async () => {
     const outside = await run(["--format", "auto"]);
     expect(outside.stdout.trim().split("\n")).toHaveLength(1);
     expect(outside.stdout).toMatch(/^\[Listen\]\(/);
+  });
+  it("auto in Orca leaves a final note, not a spinner, when the audio cannot be made", async () => {
+    const slow = await startFakeProvider({ chatDelayMs: 100 }); // chat answers {}: no script, so no edited track
+    const cfg3 = join(home, "cfg3.yaml");
+    writeFileSync(cfg3, `llm:\n  type: openai-compatible\n  base_url: ${slow.url}\n  model: fake\ntts:\n  base_url: ${slow.url}\nserve:\n  mode: loopback\n  port: 17778\n`);
+    const d = mkdtempSync(join(tmpdir(), "earshot-orca-fail-"));
+    try {
+      await new Promise<void>((resolve) => {
+        const e: NodeJS.ProcessEnv = { ...process.env, EARSHOT_HOME: home, ORCA_CHAT_SCRATCH_DIR: d };
+        for (const k of ["NODE_USE_ENV_PROXY", "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"]) delete e[k];
+        const child = spawn("npx", ["tsx", "src/cli.ts", "run", "--config", cfg3, "--format", "auto"], { env: e, cwd: join(import.meta.dirname, "..") });
+        child.on("close", () => resolve());
+        child.stdin.end(report);
+      });
+      expect(await until(() => readFileSync(playerOf(d), "utf8").includes("could not be made"))).toBe(true);
+      expect(readFileSync(playerOf(d), "utf8")).not.toContain("location.reload()");
+    } finally {
+      slow.server.close();
+      await new Promise((r) => setTimeout(r, 300));
+      rmSync(d, { recursive: true, force: true });
+    }
   });
   it("falls back to the markdown Listen line when ORCA_CHAT_SCRATCH_DIR is unset", async () => {
     const r = await run(["--format", "orca"]);
@@ -205,10 +315,12 @@ describe("earshot run --format orca", () => {
         child.stdin.end(report);
       });
       const lines = r.trim().split("\n");
-      expect(lines).toHaveLength(3);
+      expect(lines).toHaveLength(5); // player, three explain stand-ins, links
+      expect(await until(() => readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-explain.html"))!), "utf8").includes("Retries now stop at five"))).toBe(true);
+      expect(await until(() => readFileSync(playerOf(d2), "utf8").includes("decodeAudioData"))).toBe(true);
       expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
-      expect(lines[1]).toMatch(/-explain\.html" title="Retries now stop at five"/);
-      expect(lines[2]).toMatch(/^\[Listen\]\(/);
+      expect(lines[1]).toMatch(/-explain\.html" title="Explain"/);
+      expect(lines[4]).toMatch(/^\[Listen\]\(/);
       const page = readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-explain.html"))!), "utf8");
       expect(page).toContain("Retries now stop at five");
       expect(page).not.toContain("decodeAudioData");
@@ -220,7 +332,7 @@ describe("earshot run --format orca", () => {
       rmSync(d2, { recursive: true, force: true });
     }
   });
-  it("three visuals become three explain pages, each with its own headline, before the links", async () => {
+  it("three visuals become three explain pages, stand-ins first, each replaced by its own page", async () => {
     const titles = ["Retries now stop at five", "Customer names load together", "Dead letter after five tries"];
     const p = await startFakeProvider({ explain: { visuals: titles.map((title) => ({ ...EXPLAIN_SPEC, no_image: false, title })) } });
     const cfg3 = join(home, "cfg3.yaml");
@@ -239,8 +351,9 @@ describe("earshot run --format orca", () => {
       const lines = r.trim().split("\n");
       expect(lines).toHaveLength(5); // player, three explain pages, links last
       expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
-      titles.forEach((t, i) => expect(lines[i + 1]).toContain(`title="${t}"`));
+      for (const i of [1, 2, 3]) expect(lines[i]).toContain('title="Explain"'); // headlines are unknown until the call returns
       expect(lines[4]).toMatch(/^\[Listen\]\(/);
+      expect(await until(() => readdirSync(d3).some((f) => f.endsWith("-explain3.html")) && readFileSync(join(d3, readdirSync(d3).find((f) => f.endsWith("-explain3.html"))!), "utf8").includes("Dead letter after five tries"))).toBe(true);
       const files = readdirSync(d3);
       for (const kind of ["explain", "explain2", "explain3"]) expect(files.some((f) => f.endsWith(`-${kind}.html`))).toBe(true);
       const third = readFileSync(join(d3, files.find((f) => f.endsWith("-explain3.html"))!), "utf8");
