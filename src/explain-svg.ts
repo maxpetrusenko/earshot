@@ -78,7 +78,7 @@ export function timelineSvg(p: TimelinePanel, max: number, uid: string): string 
         body += `<text x="${fmt(x + w / 2)}" y="${y + 44}" class="sl s-${s.state}" font-size="13" font-weight="600" text-anchor="middle">${e(t)}</text>`;
       }
     }
-    if (lane.marker >= 0) {
+    if (lane.marker > 0 || (lane.marker === 0 && lane.markerLabel)) {
       // A tick under the bar, arrowhead on the bar's edge, so it never draws over a colored segment.
       const mx = PAD + lane.marker * scale;
       const tx = Math.min(Math.max(mx, PAD + 5), W - PAD - 5); // keep the arrowhead inside the frame
@@ -88,9 +88,9 @@ export function timelineSvg(p: TimelinePanel, max: number, uid: string): string 
         const tw = t.length * 6.8;
         const anchorEnd = mx + tw + 10 > W - PAD;
         body += `<text x="${fmt(anchorEnd ? mx - 6 : mx + 6)}" y="${y + 88}" class="lb" font-size="13" font-weight="700" text-anchor="${anchorEnd ? "end" : "start"}">${e(t)}</text>`;
-        y += 92;
-      } else y += 68;
-    } else y += 68;
+        y += 100;
+      } else y += 86;
+    } else y += 86;
   }
   body += `<line x1="${PAD}" y1="${y + 2}" x2="${W - PAD}" y2="${y + 2}" class="ax"/><text x="${PAD}" y="${y + 20}" class="lm" font-size="12">0</text><text x="${W - PAD}" y="${y + 20}" class="lm" font-size="12" text-anchor="end">${e(timeText(max, p.unit))}</text>`;
   return svg(W, y + 28, `a${uid}`, body);

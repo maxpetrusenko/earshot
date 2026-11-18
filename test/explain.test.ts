@@ -90,7 +90,20 @@ describe("parseExplain", () => {
 
 describe("explainGate", () => {
   it("passes real content of every type", () => {
-    for (const o of Object.values(ALL)) expect(explainGate(spec(o))).toBeNull();
+    for (const [k, o] of Object.entries(ALL)) if (k !== "sequence" && k !== "architecture") expect(explainGate(spec(o))).toBeNull();
+  });
+  it("rejects code-level sequence and architecture diagrams", () => {
+    expect(explainGate(spec(ALL.sequence))).toMatch(/shows how the code works/);
+    expect(explainGate(spec(ALL.architecture))).toMatch(/shows how the code works/);
+  });
+  it("rejects placeholders that say something vanishes", () => {
+    const o = clone(ALL.ui) as { panels: { elements: { text: string }[] }[] };
+    o.panels[0]!.elements[0]!.text = "Player collapses to nothing";
+    expect(explainGate(spec(o))).toMatch(/describes a picture/);
+  });
+  it("reports density with enough precision that 0.549 never reads as 0.55", () => {
+    const s = spec(ALL.ui);
+    expect(explainGate(s, 0.9999)).toMatch(/needs 1\.000|needs 0\.9999|needs 1\.00/);
   });
   it("rejects bare label boxes", () => {
     const o = clone(EXPLAIN_SPEC);

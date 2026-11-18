@@ -4,7 +4,7 @@ import type { ExplainSpec, Panel } from "./explain-schema.js";
 const EMPTY_LABELS = /^(?:fixed|implemented|completed|merged)[.!]?$/i;
 
 /** Text that stands in for a picture instead of being one. */
-const PLACEHOLDER = /^(?:diagram|screenshot|mock ?up|wireframe|placeholder|todo|tbd|image|picture)(?:\s+of)?(?:\s+here)?[.!]?$/i;
+const PLACEHOLDER = /^(?:diagram|screenshot|mock ?up|wireframe|placeholder|todo|tbd|image|picture)(?:\s+of)?(?:\s+here)?[.!]?$|\bdiagram\b|(?:collapses?|shrinks?|reduces?) to nothing|^(?:nothing|empty|n\/a|none)(?: here)?[.!]?$/i;
 
 /** Every box-like label in a panel: elements, segments, lanes, actors, components, io fields. */
 function labels(p: Panel): string[] {
@@ -49,7 +49,7 @@ export function visualDensity(spec: ExplainSpec): number {
         break;
       case "timeline":
         for (const l of p.lanes) {
-          vis += l.segments.length * 1.6 + (l.marker >= 0 ? 1.2 : 0);
+          vis += l.segments.length * 2.2 + (l.marker >= 0 ? 1.6 : 0); // a bar is a wide drawn area
           txt += 0.3;
         }
         break;
@@ -69,6 +69,7 @@ export function visualDensity(spec: ExplainSpec): number {
         break;
     }
   }
+  vis += (spec.metrics?.length ?? 0) * 0.8; // before-to-after number cards are drawn, not prose
   return vis + txt === 0 ? 0 : vis / (vis + txt);
 }
 
@@ -117,7 +118,9 @@ export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY)
     const fake = labels(p).find((l) => PLACEHOLDER.test(l));
     if (fake) return `"${fake}" describes a picture instead of being one; draw the real interface, values or timeline`;
   }
+  // Code-level diagrams show what the agent did, not what the user now sees.
+  if (spec.type === "sequence" || spec.type === "architecture") return `a ${spec.type} diagram shows how the code works, not what changed for the person; draw what they see instead (a ui_before_after or bug_before_after mockup with the changed element outlined, or a before/after timeline with bars), or return no_image`;
   const d = visualDensity(spec);
-  if (d < minDensity) return `the picture is mostly text (visual density ${d.toFixed(2)}, needs ${minDensity}); draw more mockup elements, arrows, highlights or timeline bars and fewer sentences, or return no_image`;
+  if (d < minDensity) return `the picture is mostly text (visual density ${(Math.floor(d * 1000) / 1000).toFixed(3)}, needs ${minDensity.toFixed(3)}); draw more mockup elements, arrows, highlights or timeline bars and fewer sentences, or return no_image`;
   return null;
 }

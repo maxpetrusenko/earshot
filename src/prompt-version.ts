@@ -14,4 +14,4 @@ export const PROMPT_VERSION = PROMPTS[DEFAULT_STYLE].version;
 export const SHORT_MAX_WORDS = 110;
 
 /** The visual explainer: the verbatim prompt file plus an output-format appendix (see src/explain.ts). */
-export const EXPLAIN_PROMPT = { file: "visual-explainer.v2.txt", appendix: "visual-explainer-format.v2.txt", version: "visual-explainer.v2+format.2" };
+export const EXPLAIN_PROMPT = { file: "visual-explainer.v3.txt", appendix: "visual-explainer-format.v3.txt", version: "visual-explainer.v3+format.3" };
