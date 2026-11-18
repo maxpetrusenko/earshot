@@ -3,6 +3,7 @@ import { EarScriptError, extractJson } from "./earscript.js";
 import { explainGate } from "./explain-gate.js";
 import { renderExplainHtml } from "./explain-render.js";
 import { ExplainError, isNoImage, parseExplainAll, type ExplainSpec } from "./explain-schema.js";
+import { mergeRangeCharts } from "./explain-merge.js";
 import type { LlmProvider } from "./llm.js";
 import { traceGeneration, traceSpan } from "./lib/llm-tracing.js";
 import { EXPLAIN_PROMPT } from "./prompt-version.js";
@@ -52,7 +53,7 @@ export async function buildExplain(llm: LlmProvider, reply: string): Promise<Exp
         const raw = await traceGeneration("explain", { model: llm.model, input: user, metadata: { prompt: EXPLAIN_PROMPT.version, retries } }, () => llm.complete({ system, user, json: true }));
         if (isNoImage(raw)) return none(retries, "no_image");
         try {
-          const specs = parseExplainAll(extractJson(raw));
+          const specs = mergeRangeCharts(parseExplainAll(extractJson(raw)));
           if (specs.length === 0) return none(retries, "no_image");
           // Each concept is gated alone. Passing ones ship; if some fail on the first try the model is asked once to fix the set.
           const bads = specs.map((sp) => explainGate(sp));

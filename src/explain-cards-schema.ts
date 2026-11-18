@@ -1,4 +1,4 @@
-import { arr, cleanText, num, oneOf, rangeText, rec } from "./explain-util.js";
+import { arr, cleanText, num, oneOf, padDecimals, rangeText, rec } from "./explain-util.js";
 
 /**
  * Panels of the reference style: one concept per image, a few labeled cards. The model returns data only.
@@ -99,7 +99,7 @@ export function cardsPanel(p: Record<string, unknown>): CardsPanel {
       sub: cleanText(r.sub, 28),
       tone: oneOf(r.tone, TONES, "neutral"),
       title: cleanText(r.title, 40),
-      mono: cleanText(r.mono, 36),
+      mono: padDecimals(cleanText(r.mono, 36)),
       mark: oneOf(r.mark, MARKS, "none"),
       caption: cleanText(r.caption, 90),
     };

@@ -65,8 +65,7 @@ function logBlock(p: CardsPanel): string {
   const [x, y] = p.cards;
   const [lx, ly] = alignLines(x!.mono, y!.mono);
   const row = (c: Card, html: string): string => `<div class="lg t-${c.tone}"><span class="lt">${e(c.tag)}${c.sub ? ` <em>${e(c.sub)}</em>` : ""}</span><code>${html}</code></div>`;
-  const caps = p.cards.filter((c) => c.caption).map((c) => `<p class="cc t-${c.tone}">${e(c.caption)}</p>`).join("");
-  return `<section class="log">${row(x!, lx)}${row(y!, ly)}</section>${caps}`;
+  return `<section class="log">${row(x!, lx)}${row(y!, ly)}</section>`;
 }
 
 const fmt = (n: number): string => String(Math.round(n * 100) / 100);

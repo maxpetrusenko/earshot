@@ -33,3 +33,14 @@ export function rangeText(v: unknown, max: number): string {
   const raw = typeof v === "string" || typeof v === "number" ? String(v).replace(new RegExp(`(\\d)\\s*(?:to|[${C(0x2013, 0x2014)}-])\\s*(\\d)`, "g"), "$1 to $2") : "";
   return cleanText(raw, max).replace(/(\d)\s+to\s+(\d)/g, `$1${EN_DASH}$2`);
 }
+
+/**
+ * Pad every decimal number in a log line to the longest decimal count on that line, so a threshold never reads
+ * coarser than the value it is compared with ("0.549 needs 0.55" becomes "0.549 needs 0.550"). Needs two or more decimals.
+ */
+export function padDecimals(line: string): string {
+  const nums = line.match(/\d+\.\d+/g) ?? [];
+  if (nums.length < 2) return line;
+  const places = Math.max(...nums.map((n) => n.split(".")[1]!.length));
+  return line.replace(/\d+\.\d+/g, (n) => n + "0".repeat(places - n.split(".")[1]!.length));
+}

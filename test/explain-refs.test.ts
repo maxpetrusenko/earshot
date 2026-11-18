@@ -7,6 +7,7 @@ import { explainGate } from "../src/explain-gate.js";
 import { renderExplainHtml } from "../src/explain-render.js";
 import { parseExplain, type ExplainSpec } from "../src/explain-schema.js";
 import type { LlmProvider } from "../src/llm.js";
+import { padDecimals } from "../src/explain-util.js";
 
 const root = join(import.meta.dirname, "..");
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -170,5 +171,34 @@ describe("skill and prompt share one rule set", () => {
     for (const rule of ["one concept", "dashed", "waveform", "bracket", "no time axis", "illustrative", "status update"]) {
       expect(prompt.toLowerCase(), `prompt: ${rule}`).toContain(rule);
     }
+  });
+});
+
+describe("log precision and one perf image", () => {
+  it("pads every decimal on a line to the same places: 0.549 needs 0.55 reads 0.549 needs 0.550", () => {
+    expect(padDecimals("0.549 needs 0.55")).toBe("0.549 needs 0.550");
+    expect(padDecimals("0.55 needs 0.55")).toBe("0.55 needs 0.55");
+    expect(padDecimals("took 1.5 s")).toBe("took 1.5 s");
+    const o = clone(LOG);
+    o.panels[0]!.cards[1]!.mono = "0.549 needs 0.55";
+    const html = renderExplainHtml(spec(o));
+    expect(html).toContain('needs 0.55<mark class="df">0</mark>');
+    expect(spec(o).panels[0]).toMatchObject({ cards: [{}, { mono: "0.549 needs 0.550" }] });
+  });
+  it("draws a log as one close-up with no caption lines", () => {
+    const html = renderExplainHtml(spec(LOG));
+    expect(html).not.toContain('class="cc');
+    expect(html).not.toContain("Same-looking numbers.");
+    expect(html).not.toContain("Visibly below.");
+  });
+  it("one reply with two perf charts ships one image that carries both main numbers", async () => {
+    const time = { eyebrow: "Invoices / Performance", title: "The page loads faster.", takeaway: "Page time.", type: "range_chart", panels: [{ unit: "s", rows: [{ label: "Before", from: 1.8, to: 1.8, text: "1.8 s" }, { label: "After", from: 0.24, to: 0.24, text: "240 ms", tone: "good" }] }] };
+    const queries = { eyebrow: "Invoices / Performance", title: "One query per page.", takeaway: "Queries per page.", type: "range_chart", panels: [{ unit: "queries", rows: [{ label: "Before", from: 201, to: 201 }, { label: "After", from: 1, to: 1, tone: "good" }] }] };
+    const llm: LlmProvider = { name: "f", model: "f", complete: async () => JSON.stringify({ visuals: [time, queries] }) };
+    const r = await buildExplain(llm, "Page 1.8 s to 240 ms, queries 201 to 1.");
+    expect(r.visuals).toHaveLength(1);
+    expect(r.visuals[0]!.html).toContain("1.8 s");
+    expect(r.visuals[0]!.html).toContain("240 ms");
+    expect(r.visuals[0]!.html).toContain("Queries per page: 201 to 1");
   });
 });

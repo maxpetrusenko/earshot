@@ -28,10 +28,10 @@ PANELS BY TYPE
 
 log_compare: a value that looked wrong against the right one. Drawn as ONE close-up of two aligned lines, with only the digits that differ highlighted by the program. No cards.
   {"cards": [
-    {"tag": "BEFORE", "sub": "REPORTED LOG", "tone": "bad", "mono": "0.55 needs 0.55", "caption": "Same-looking numbers made the rejection confusing."},
-    {"tag": "AFTER", "sub": "EXPECTED DISPLAY", "tone": "good", "mono": "0.549 needs 0.550", "caption": "The score is visibly below the threshold."}
+    {"tag": "BEFORE", "sub": "REPORTED LOG", "tone": "bad", "mono": "0.55 needs 0.55"},
+    {"tag": "AFTER", "sub": "EXPECTED DISPLAY", "tone": "good", "mono": "0.549 needs 0.550"}
   ]}
-  mono is copied from the reply exactly, 36 characters at most; both lines share the same wording so the numbers line up. Caption: one short sentence, 90 characters at most.
+  mono is copied from the reply exactly, 36 characters at most; both lines share the same wording so the numbers line up. No captions: the two lines are the whole picture. Write every decimal number on a line with the same number of decimals.
 
 state_key: two states the user must tell apart, drawn in the SAME player slot, one above the other, so the eye compares the contents. No timings, no axis.
   {"cards": [
@@ -46,7 +46,7 @@ range_chart: values from the reply on ONE shared axis. Only when the reply gives
     {"label": "After", "from": 7, "to": 11, "text": "", "tone": "good"}
   ]}
   "player": true when the numbers are how long until something becomes available in the player: the track is then drawn as the player bar, dashed while waiting and a waveform once available, with the value printed once at that moment. Use false for any other numbers.
-  from and to are the reply's own numbers in one unit. A dot is a value, a bracket is a range. "open": true on a row when the reply says "more than" or "at least" (from is that number): it draws an open-ended bracket that runs off to the axis end, never a dot at the number. Equal from and to is a point. text is the value exactly as the reply writes it ("240 ms", "about 60 s"), even when the axis unit differs; leave it empty only when the reply gives a plain number in the axis unit. Two to four rows. No invented average, no stage breakdown.
+  from and to are the reply's own numbers in one unit. A dot is a value, a bracket is a range. "open": true on a row when the reply says "more than" or "at least" (from is that number): it draws an open-ended bracket that runs off to the axis end, never a dot at the number. Equal from and to is a point. text is the value exactly as the reply writes it ("240 ms", "about 60 s"), even when the axis unit differs; leave it empty only when the reply gives a plain number in the axis unit. Two to four rows. No invented average, no stage breakdown. ONE range_chart per reply: it holds the headline numbers (the before and after of the main measure). A second measure goes in the footer, not in a second image.
 
 architecture (layered only): a design or recommendation as a stack, top to bottom, one flow direction.
   {"layers": [
