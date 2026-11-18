@@ -75,6 +75,32 @@ function rowText(r: RangeRow, unit: string): string {
   return r.to > r.from ? `${fmt(r.from)}${EN_DASH}${fmt(r.to)} ${unit}` : `${fmt(r.from)} ${unit}`;
 }
 
+const WAVE_MIN = 15;
+/** Most query ticks one strip can hold and still read as a count. */
+const TICK_CAP = 240;
+
+/** The leading whole number of a row note ("201 queries" is 201), or null. */
+export const noteCount = (note: string): number | null => {
+  const m = /^(\d+)\b/.exec(note);
+  return m ? Number(m[1]) : null;
+};
+
+/** One hairline per counted thing, drawn on a grid as wide as the largest count: 201 lines against 1 shows the cause, no scale beyond the numbers the reply gives. */
+function tickStrips(rows: RangeRow[]): (string | "")[] {
+  const counts = rows.map((r) => noteCount(r.note));
+  const max = Math.max(0, ...counts.map((c) => c ?? 0));
+  if (counts.some((c) => c === null) || max < 2 || max > TICK_CAP) return rows.map(() => "");
+  return counts.map((c) => `<div class="qs" style="grid-template-columns:repeat(${max},1fr)" aria-hidden="true">${"<i></i>".repeat(c!)}</div>`);
+}
+
+/** The player waveform of a row: only inside a closed range, from its start to its end, so it never implies playback past the data. */
+export function waveSpan(r: RangeRow, left: number, right: number): string {
+  const width = Math.round((right - left) * 10) / 10;
+  // A bracket under about 15% of the axis is too narrow for a waveform to read as anything but noise.
+  if (r.open || r.to <= r.from || width < WAVE_MIN) return "";
+  return `<span class="pw" style="left:${left}%;width:${width}%"><s>${waveBars(Math.max(3, Math.round(width * 1.5)))}</s></span>`;
+}
+
 /**
  * One shared axis. Draws only when the rows carry numbers; the gate guarantees at least two. A value is a dot, a range
  * is a bracket. With player on, the track is the player bar: dashed while waiting, a waveform once Original is available,
@@ -83,17 +109,18 @@ function rowText(r: RangeRow, unit: string): string {
 function range(p: RangePanel): string {
   const pct = (v: number): number => Math.round((v / p.axisMax) * 1000) / 10;
   const grid = p.ticks.map((t) => `<i class="gl" style="left:${pct(t)}%"></i>`).join("");
+  const strips = tickStrips(p.rows);
   const rows = p.rows
     .map((r, i) => {
       const left = pct(r.from);
       const right = pct(r.to);
       const tone = r.tone === "neutral" && i > 0 ? "good" : r.tone;
       const mk = r.open ? `<b class="rb open" style="left:${left}%;width:${100 - left}%"></b>` : r.to > r.from ? `<b class="rb" style="left:${left}%;width:${Math.max(1.5, right - left)}%"></b>` : `<b class="pt" style="left:${left}%"></b>`;
-      const fill = p.player ? `<span class="wt" style="width:${left}%"><s>${dashes(70)}</s></span><span class="pw" style="left:${right}%"><s>${waveBars(160)}</s></span>` : "";
+      const fill = p.player ? `<span class="wt" style="width:${left}%"><s>${dashes(70)}</s></span>${waveSpan(r, left, right)}` : "";
       const anchor = r.open ? (left + 100) / 2 : r.to > r.from ? (left + right) / 2 : left;
       const flip = anchor > 70 ? " flip" : anchor < 14 ? " lo" : "";
       const lab = `<span class="vl${flip}" style="left:${anchor}%">${e(rowText(r, p.unit))}</span>`;
-      return `<div class="rw t-${tone}"><p class="rh"><span>${e(r.label)}</span></p><div class="rt${p.player ? " pbar" : ""}"><u></u>${fill}${mk}${lab}</div></div>`;
+      return `<div class="rw t-${tone}"><p class="rh"><span>${e(r.label)}</span>${r.note ? `<strong>${e(r.note)}</strong>` : ""}</p>${strips[i]}<div class="rt${p.player ? " pbar" : ""}"><u></u>${fill}${mk}${lab}</div></div>`;
     })
     .join("");
   const longUnit = p.unit.length > 3;

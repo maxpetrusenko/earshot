@@ -7,7 +7,7 @@ description: Make or review a visual explainer image for an agent reply: a befor
 
 One reply in, zero to three phone-sized images out. The picture must make the change visible before anyone reads a word. A picture that reads like a formatted summary has failed, even when every fact in it is right.
 
-Code that does this in earshot: `src/explain-*.ts`, prompt `prompts/visual-explainer.v4.txt` plus `prompts/visual-explainer-format.v4.txt`, scorer `scripts/explain-score.ts`. The rules below and the prompt are one rule set; `test/explain-refs.test.ts` fails if they drift.
+Code that does this in earshot: `src/explain-*.ts`, prompt `prompts/visual-explainer.v5.txt` plus `prompts/visual-explainer-format.v5.txt`, scorer `scripts/explain-score.ts`. The rules below and the prompt are one rule set; `test/explain-refs.test.ts` fails if they drift.
 
 Details live in `references/`:
 - `references/methods.md`: the four methods, how to run each

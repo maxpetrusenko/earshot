@@ -31,7 +31,7 @@ const STATES = {
 };
 const RANGE = {
   eyebrow: "Earshot / Illustrative data",
-  title: "Original is ready sooner.",
+  title: "Original ready in 7 to 11 s.",
   takeaway: "Time until Original can play.",
   type: "range_chart",
   illustrative: true,
@@ -118,7 +118,7 @@ describe("reference style render", () => {
     expect(log).not.toMatch(/dark|prefers-color-scheme/);
     const r = renderExplainHtml(spec(RANGE));
     expect(r.match(/7–11 s/g)).toHaveLength(1);
-    expect(r).toContain('class="pw"');
+    expect(r).not.toContain('class="pw"'); // 7 to 11 s is too narrow for a waveform
     expect(r).toContain('class="rb"');
     expect(r).toContain('class="pt"');
   });
@@ -192,13 +192,74 @@ describe("log precision and one perf image", () => {
     expect(html).not.toContain("Visibly below.");
   });
   it("one reply with two perf charts ships one image that carries both main numbers", async () => {
-    const time = { eyebrow: "Invoices / Performance", title: "The page loads faster.", takeaway: "Page time.", type: "range_chart", panels: [{ unit: "s", rows: [{ label: "Before", from: 1.8, to: 1.8, text: "1.8 s" }, { label: "After", from: 0.24, to: 0.24, text: "240 ms", tone: "good" }] }] };
+    const time = { eyebrow: "Invoices / Performance", title: "Invoice list: 1.8 s to 240 ms.", takeaway: "Page time.", type: "range_chart", panels: [{ unit: "s", rows: [{ label: "Before", from: 1.8, to: 1.8, text: "1.8 s" }, { label: "After", from: 0.24, to: 0.24, text: "240 ms", tone: "good" }] }] };
     const queries = { eyebrow: "Invoices / Performance", title: "One query per page.", takeaway: "Queries per page.", type: "range_chart", panels: [{ unit: "queries", rows: [{ label: "Before", from: 201, to: 201 }, { label: "After", from: 1, to: 1, tone: "good" }] }] };
     const llm: LlmProvider = { name: "f", model: "f", complete: async () => JSON.stringify({ visuals: [time, queries] }) };
     const r = await buildExplain(llm, "Page 1.8 s to 240 ms, queries 201 to 1.");
     expect(r.visuals).toHaveLength(1);
     expect(r.visuals[0]!.html).toContain("1.8 s");
     expect(r.visuals[0]!.html).toContain("240 ms");
-    expect(r.visuals[0]!.html).toContain("Queries per page: 201 to 1");
+    // The cause sits on its rows, not only in the footer.
+    expect(r.visuals[0]!.html).toContain("<strong>201 queries</strong>");
+    expect(r.visuals[0]!.html).toContain("<strong>1 query</strong>");
+    // And it is drawn: one hairline per query, 201 against 1.
+    expect(r.visuals[0]!.html.match(/<i><\/i>/g)).toHaveLength(202);
+  });
+});
+
+describe("range chart headline and waveform extent", () => {
+  const withRows = (rows: unknown[], player = true) => ({ ...clone(RANGE), panels: [{ unit: "s", player, rows }] });
+  const marks = (html: string): { left: number; width: number }[] => [...html.matchAll(/class="pw" style="left:([\d.]+)%;width:([\d.]+)%"/g)].map((m) => ({ left: Number(m[1]), width: Number(m[2]) }));
+
+  it("rejects a range headline with no number", () => {
+    const o = clone(RANGE);
+    o.title = "Original is ready sooner.";
+    expect(explainGate(spec(o))).toMatch(/own numbers/);
+  });
+
+  it("never draws a waveform past the data: it spans the bracket and nothing else", () => {
+    const wide = clone(RANGE);
+    wide.panels[0]!.rows[1] = { label: "After", from: 8, to: 36, tone: "good" };
+    const html = renderExplainHtml(spec(wide));
+    const m = marks(html);
+    expect(m).toHaveLength(1); // the 60 s point row has no waveform at all
+    const axisMax = 60;
+    expect(m[0]!.left).toBeCloseTo((8 / axisMax) * 100, 0);
+    expect(m[0]!.left + m[0]!.width).toBeLessThanOrEqual((36 / axisMax) * 100 + 0.1);
+    expect(html).not.toContain("mask-image");
+  });
+
+  it("draws no waveform at all for a bracket too narrow to read, like 7 to 11 s on a 60 s axis", () => {
+    expect(marks(renderExplainHtml(spec(RANGE)))).toHaveLength(0);
+  });
+
+  it("holds for any range, point or open value", () => {
+    for (const [from, to, open] of [[7, 11, false], [2, 30, false], [40, 40, false], [12, 12, true], [0, 5, false]] as const) {
+      const html = renderExplainHtml(spec(withRows([{ label: "Before", from: 60, to: 60 }, { label: "After", from, to, open }])));
+      const axisMax = 60;
+      for (const w of marks(html)) {
+        expect(w.left).toBeGreaterThanOrEqual((from / axisMax) * 100 - 0.1);
+        expect(w.left + w.width).toBeLessThanOrEqual((to / axisMax) * 100 + 0.1);
+      }
+      if (open || to <= from) expect(marks(html)).toHaveLength(0);
+    }
+  });
+});
+
+describe("architecture arrow labels", () => {
+  const archWith = (link: string) => {
+    const o = clone(ARCH);
+    o.panels[0]!.layers[1]!.link = link;
+    return o;
+  };
+  it("keeps a long arrow label whole instead of cutting it mid-word", () => {
+    const s = spec(archWith("Mouse, keyboard, observe actions through the socket"));
+    const l = (s.panels[0] as { layers: { link: string }[] }).layers[1]!.link;
+    expect(l).toBe("Mouse, keyboard, observe actions through");
+    expect(l).not.toMatch(/actio$/);
+  });
+  it("rejects an arrow label that repeats the capability names in the box", () => {
+    expect(explainGate(spec(archWith("Mouse, keyboard, observe actions")))).toMatch(/repeats names/);
+    expect(explainGate(spec(archWith("native pointer events")))).toBeNull();
   });
 });
