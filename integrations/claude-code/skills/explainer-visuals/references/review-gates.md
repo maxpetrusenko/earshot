@@ -15,11 +15,11 @@ Fail when:
 
 A fail means change the composition (same slot, bigger mark, one highlight), not the prompt. Only after the composition passes does tuning the prompt make sense.
 
-Implementation: `scripts/explain-demo.ts --shots` writes `<name>-bare.png` beside each screenshot and an `.input.txt` with the reply. `scripts/explain-score.ts` runs the two-second test on the bare image first; a fail scores 0 and the exit code is 1.
+Implementation (macbook-only: Playwright and `claude -p` run on pro): `scripts/explain-demo.ts --shots` renders 390 px only (draft rounds; `--final` adds 1280 once at the end) and writes `<name>-bare.png` beside each screenshot and an `.input.txt` with the reply. `scripts/explain-score.ts` runs the two-second test on the bare image first; a fail scores 0 and the exit code is 1. The test runs on Sonnet (`--twosec-model`).
 
-## Gate 2: Opus 8/10 rubric
+## Gate 2: 8/10 rubric (Sonnet for drafts, Opus for the final score)
 
-`claude -p --model opus` opens the reference PNGs (the style bar) and the image, with the reply as ground truth. Eight areas scored 1 to 10: realism, legibility, density, journey (does the headline state the conclusion), metrics (exact, honest, illustrative labeled, no axis without timings), how, clarity, style (match to the reference, light palette). Overall must be 8 or higher for every image.
+Draft rounds score on Sonnet, four images at a time (`--jobs 4`, `--draft-model sonnet`). The final score is `explain-score.ts --final` (`--final-model`, default `claude -p --model opus`); only that score counts for approval. The model opens the reference PNGs (the style bar) and the image, with the reply as ground truth. Eight areas scored 1 to 10: realism, legibility, density, journey (does the headline state the conclusion), metrics (exact, honest, illustrative labeled, no axis without timings), how, clarity, style (match to the reference, light palette). Overall must be 8 or higher for every image.
 
 Grading rules:
 - Timelines and state keys are graded on whether the states and timing make sense for the reply, not on whether they look like screenshots.

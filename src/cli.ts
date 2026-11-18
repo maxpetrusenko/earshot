@@ -21,6 +21,8 @@ import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
 import { orcaDir } from "./orca.js";
+import { renderFallbackHtml } from "./explain-fallback.js";
+import { redact } from "./redact.js";
 import { EXPLAIN_MIN_CHARS, finishExplain, finishPlayer, orcaLines, orcaOutput, type OrcaJob } from "./orca-output.js";
 import { flushTracing } from "./lib/llm-tracing.js";
 import { dryRun, executeBrief, loadPrepared, NothingUsableError } from "./run.js";
@@ -78,6 +80,7 @@ interface RunFlags {
   sketch: boolean;
   explain: boolean;
   explainPng?: boolean;
+  visual?: boolean;
   audio: boolean;
   json?: boolean;
   format?: string;
@@ -121,10 +124,14 @@ async function runCommand(flags: RunFlags): Promise<number> {
   };
   if (inline) {
     // The explain page is still made (card page, optional PNG) when the reply is long enough; it is never printed as a chat line.
-    const withExplain = flags.sketch && flags.explain && cfg.image.type !== "none" && input.text.length >= EXPLAIN_MIN_CHARS;
-    const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, orca: { dir: scratch!, explain: withExplain, png: flags.explainPng === true }, log });
+    // --visual is the caller asking for a picture: the Explain line prints now and a page is guaranteed behind it.
+    const explainOn = flags.sketch && flags.explain && cfg.image.type !== "none";
+    const visual = flags.visual === true && explainOn;
+    if (flags.visual && !explainOn) log("--visual ignored: the explain stage is off (--no-explain, --no-sketch or image.type none)");
+    const withExplain = visual || (explainOn && input.text.length >= EXPLAIN_MIN_CHARS);
+    const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, orca: { dir: scratch!, explain: withExplain, png: flags.explainPng === true, visual }, log });
     log(`worker pid ${job.pid}, log ${job.log}`);
-    process.stdout.write(`${orcaLines(job.prepared.meta.id, await cachedBaseUrl(cfg.serve))}\n`);
+    process.stdout.write(`${orcaLines(job.prepared.meta.id, await cachedBaseUrl(cfg.serve), visual)}\n`);
     return 0;
   }
   if (flags.detach) {
@@ -147,7 +154,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   if (!orca) out(base, prep.meta.id);
   let result;
   try {
-    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch || !flags.explain, explain: orca, noAudio: !flags.audio, waitForAudio: orca, log });
+    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch || !flags.explain, explain: orca, visual: orca && flags.visual === true, noAudio: !flags.audio, waitForAudio: orca, log });
   } catch (e) {
     if (e instanceof NothingUsableError) {
       err(`earshot: nothing usable was produced: ${e.message}`);
@@ -201,6 +208,7 @@ program
   .option("--no-sketch", "skip every picture (same as --no-explain)")
   .option("--no-explain", "skip the visual explanation page")
   .option("--explain-png", "also render the explanation as a 1080x1350 PNG next to the page (needs playwright and a Chromium)")
+  .option("--visual", "with --format auto in Orca: print the Explain ::orca-visual line at once with a placeholder page; the worker writes the model's image over it, or a deterministic what-changed card when the model draws nothing. Without it no Explain line is printed")
   .option("--no-audio", "skip the audio")
   .option("--json", "same as --format json")
   .option("--format <format>", "text (one markdown line: [Listen](...) · [Original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) orca (wait for the audio, write an inline player page for Orca chat, print the ::orca-visual line, then the links) or auto (never waits: in Orca, stand-in player pages and the ::orca-visual lines at once and the worker fills them in; elsewhere the links at once)")
@@ -234,8 +242,9 @@ program
   .option("--orca-dir <path>", "write the Orca player page (and explain page) here when the audio is ready")
   .option("--orca-explain", "also make the explain pages (they go on the card page)")
   .option("--explain-png", "with --orca-explain: also render the PNG")
+  .option("--orca-visual", "the Explain line is already in the chat: write the explain page (the image or the fallback card) into the Orca dir")
   .option("--config <path>", "alternate config file")
-  .action(async (id: string, o: { config?: string; title?: string; orcaDir?: string; orcaExplain?: boolean; explainPng?: boolean }) => {
+  .action(async (id: string, o: { config?: string; title?: string; orcaDir?: string; orcaExplain?: boolean; explainPng?: boolean; orcaVisual?: boolean }) => {
     const cfg = loadConfig(o.config);
     const prep = loadPrepared(id);
     if (!prep) {
@@ -243,16 +252,17 @@ program
       process.exitCode = 2;
       return;
     }
-    const orca: OrcaJob | null = o.orcaDir ? { dir: o.orcaDir, png: o.explainPng === true } : null;
+    const orca: OrcaJob | null = o.orcaDir ? { dir: o.orcaDir, png: o.explainPng === true, visual: o.orcaVisual === true } : null;
     let playerDone = false;
+    let explainDone = false;
     try {
       const r = await executeBrief(cfg, createLlm(cfg.llm), prep, {
         from: prep.meta.source.from,
         title: o.title,
         log,
-        ...(orca ? { explain: o.orcaExplain === true, waitForAudio: true } : {}),
+        ...(orca ? { explain: o.orcaExplain === true, waitForAudio: true, visual: orca.visual === true } : {}),
         onAudioReady: orca ? (async () => { playerDone = true; await finishPlayer(orca.dir, id, log); }) : undefined,
-        onExplain: orca ? (async (htmls) => { await finishExplain(orca, id, htmls, log); }) : undefined,
+        onExplain: orca ? (async (htmls) => { explainDone = true; await finishExplain(orca, id, htmls, log); }) : undefined,
       });
       log(`${r.meta.status} in ${r.meta.total_ms}ms`);
     } catch (e) {
@@ -262,6 +272,8 @@ program
     } finally {
       // A placeholder must never be left asking for a file that will not come.
       if (orca && !playerDone) await finishPlayer(orca.dir, id, log);
+      // The same for the Explain line printed by --visual: never leave the placeholder, write the card from the reply.
+      if (orca?.visual && !explainDone) await finishExplain(orca, id, [renderFallbackHtml(cfg.privacy.redact ? redact(prep.text).text : prep.text)], log);
     }
   });
 

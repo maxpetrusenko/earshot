@@ -85,12 +85,25 @@ export const noteCount = (note: string): number | null => {
   return m ? Number(m[1]) : null;
 };
 
-/** One hairline per counted thing, drawn on a grid as wide as the largest count: 201 lines against 1 shows the cause, no scale beyond the numbers the reply gives. */
+/** One hairline per counted thing, drawn on a grid as wide as the largest count: 201 lines against 1 shows the cause, no scale beyond the numbers the reply gives. A count of 1 is drawn wide by the stylesheet (`.qs i:only-child`) so it never vanishes next to 201. */
 function tickStrips(rows: RangeRow[]): (string | "")[] {
   const counts = rows.map((r) => noteCount(r.note));
   const max = Math.max(0, ...counts.map((c) => c ?? 0));
   if (counts.some((c) => c === null) || max < 2 || max > TICK_CAP) return rows.map(() => "");
   return counts.map((c) => `<div class="qs" style="grid-template-columns:repeat(${max},1fr)" aria-hidden="true">${"<i></i>".repeat(c!)}</div>`);
+}
+
+/** The cause (201 queries against 1) on its own strip under the timing chart, in the same image: a label, one hairline per counted thing, and the reply's own words for the count. */
+function causeStrip(rows: RangeRow[]): string {
+  if (rows.every((r) => !r.note)) return "";
+  const strips = tickStrips(rows);
+  const body = rows
+    .map((r, i) => {
+      const tone = r.tone === "neutral" && i > 0 ? "good" : r.tone;
+      return `<div class="cr t-${tone}"><p><span>${e(r.label)}</span><strong>${e(r.note)}</strong></p>${strips[i]}</div>`;
+    })
+    .join("");
+  return `<section class="cd cs">${body}</section>`;
 }
 
 /** The player waveform of a row: only inside a closed range, from its start to its end, so it never implies playback past the data. */
@@ -109,7 +122,6 @@ export function waveSpan(r: RangeRow, left: number, right: number): string {
 function range(p: RangePanel): string {
   const pct = (v: number): number => Math.round((v / p.axisMax) * 1000) / 10;
   const grid = p.ticks.map((t) => `<i class="gl" style="left:${pct(t)}%"></i>`).join("");
-  const strips = tickStrips(p.rows);
   const rows = p.rows
     .map((r, i) => {
       const left = pct(r.from);
@@ -120,13 +132,13 @@ function range(p: RangePanel): string {
       const anchor = r.open ? (left + 100) / 2 : r.to > r.from ? (left + right) / 2 : left;
       const flip = anchor > 70 ? " flip" : anchor < 14 ? " lo" : "";
       const lab = `<span class="vl${flip}" style="left:${anchor}%">${e(rowText(r, p.unit))}</span>`;
-      return `<div class="rw t-${tone}"><p class="rh"><span>${e(r.label)}</span>${r.note ? `<strong>${e(r.note)}</strong>` : ""}</p>${strips[i]}<div class="rt${p.player ? " pbar" : ""}"><u></u>${fill}${mk}${lab}</div></div>`;
+      return `<div class="rw t-${tone}"><p class="rh"><span>${e(r.label)}</span></p><div class="rt${p.player ? " pbar" : ""}"><u></u>${fill}${mk}${lab}</div></div>`;
     })
     .join("");
   const longUnit = p.unit.length > 3;
   const ticks = p.ticks.map((t) => `<span style="left:${pct(t)}%">${fmt(t)}${t === p.axisMax && !longUnit ? ` ${e(p.unit)}` : ""}</span>`).join("");
   const unit = longUnit ? `<p class="au">${e(p.unit)}</p>` : "";
-  return `<section class="cd rg"><div class="plot">${grid}${rows}</div><div class="axis" aria-hidden="true">${ticks}</div>${unit}</section>`;
+  return `<section class="cd rg"><div class="plot">${grid}${rows}</div><div class="axis" aria-hidden="true">${ticks}</div>${unit}</section>${causeStrip(p.rows)}`;
 }
 
 function node(n: LayerItem): string {

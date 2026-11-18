@@ -24,9 +24,17 @@ Run this once, at the very end of every reply to the user, tool use or not (a re
 EARSHOT_EOF
 ```
 
+   Add `--visual` only when the reply is a multi-step change, a UI change, a perf result or an architecture recommendation (a reply the reader should see, not only read). Never pass it for a status update, a test or lint or build result, a short reply or an answer to a question; those get no picture, and without the flag no Explain line is printed.
+
+```bash
+{{EARSHOT}} run --format auto --visual --from claude-code --session "${CLAUDE_SESSION_ID}" <<'EARSHOT_EOF'
+<your final reply, exactly as you will send it>
+EARSHOT_EOF
+```
+
 3. The command returns in about half a second and the audio is made in the background. Outside Orca it prints one markdown line, like `[Listen](<url>) · [Original](<url>)`. Each link starts playing when tapped, even while the audio is still being made.
-   Inside Orca (`ORCA_CHAT_SCRATCH_DIR` is set and writable) it prints `::orca-visual{file="earshot-<id>-player.html" title="Listen"}` (the Mac player; it renders nothing on iOS), then the markdown line for the phone. There is no Explain line: whether the model draws an image is only known after the reply is printed, so any image goes on the card page behind the links. The player page says it is preparing until the audio is ready, a few seconds later.
+   Inside Orca (`ORCA_CHAT_SCRATCH_DIR` is set and writable) it prints `::orca-visual{file="earshot-<id>-player.html" title="Listen"}` (the Mac player; it renders nothing on iOS), then the markdown line for the phone. Without `--visual` there is no Explain line: whether the model draws an image is only known after the reply is printed, so any image goes on the card page behind the links. With `--visual` it prints a second line, `::orca-visual{file="earshot-<id>-explain.html" title="Explain"}`, between the player line and the markdown line; the page starts as a placeholder and the worker replaces it with the model's image, or with a "what changed" card built from the reply's headings and bullets when the model draws nothing, so the line is never an empty card. The player page says it is preparing until the audio is ready, a few seconds later.
    Copy what it prints verbatim. Do not wait for the audio and do not run anything else to check on it.
-4. Send your final reply, unchanged. Make the last lines of the message exactly what the command printed, with nothing after them: the single markdown line, or in Orca each `::orca-visual` line on its own line (outside any code block) followed by the markdown line, kept in that order. Do not add the card link or any other link, and do not turn the links into raw URLs.
+4. Send your final reply, unchanged. Make the last lines of the message exactly what the command printed, with nothing after them: the single markdown line, or in Orca each `::orca-visual` line (player, then Explain when printed) on its own line (outside any code block) followed by the markdown line, kept in that order. Do not add the card link or any other link, and do not turn the links into raw URLs.
 
 If the command fails or prints no `[Listen](` line, say so in one sentence and do not invent a link.

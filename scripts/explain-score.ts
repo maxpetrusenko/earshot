@@ -1,30 +1,42 @@
-// Score explainer screenshots with Opus on the Claude subscription login, one image at a time.
-// The image path goes into the prompt; Opus opens it with its Read tool and answers with strict JSON.
-// Usage: pnpm tsx scripts/explain-score.ts <png|dir> [...more] [--model opus] [--json] [--min 8]
-// Exits 2 when the Claude login is not usable (weekly limit, not logged in), so a loop can tell a real
-// low score from a missing quota.
-import { spawn } from "node:child_process";
+// Score explainer screenshots on the Claude subscription login. The image path goes into the prompt; the model opens it
+// with its Read tool and answers with strict JSON.
+// Usage: pnpm tsx scripts/explain-score.ts <png|dir> [...more] [--final] [--jobs 4] [--json] [--min 8]
+//          [--draft-model sonnet] [--final-model opus] [--twosec-model sonnet] [--model <m>] [--width 390]
+// Speed defaults (Max asked for them): images are scored in parallel (--jobs, default 4); the two-second test and every
+// draft round run on Sonnet; Opus scores only with --final. --model overrides the rubric model whatever the mode.
+// Draft rounds should look at 390 px shots only (explain-demo and explain-preview render 1280 only with --final).
+// Exits 2 when the Claude login is not usable (weekly limit, not logged in), so a loop can tell a real low score from a
+// missing quota. Prints the wall time and the models used on stderr.
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const json = args.includes("--json");
-const minFlag = args.indexOf("--min");
-const min = minFlag >= 0 ? Number(args[minFlag + 1]) : 0;
-const modelFlag = args.indexOf("--model");
-const model = modelFlag >= 0 ? args[modelFlag + 1]! : "opus";
-const inputs = args.filter((a, i) => !a.startsWith("--") && args[i - 1] !== "--min" && args[i - 1] !== "--model");
+const final = args.includes("--final");
+const VALUE_FLAGS = ["--min", "--model", "--jobs", "--draft-model", "--final-model", "--twosec-model", "--width"];
+const valueOf = (name: string): string | undefined => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+const min = Number(valueOf("--min") ?? 0);
+const jobs = Math.max(1, Number(valueOf("--jobs") ?? 4) || 4);
+const rubricModel = valueOf("--model") ?? (final ? (valueOf("--final-model") ?? "opus") : (valueOf("--draft-model") ?? "sonnet"));
+// Only score shots rendered at this width (file names carry -390- or -1280-); the score that counts is the 390 px one.
+const width = valueOf("--width");
+const twoSecModel = valueOf("--twosec-model") ?? "sonnet";
+const inputs = args.filter((a, i) => !a.startsWith("--") && !VALUE_FLAGS.includes(args[i - 1] ?? ""));
 
 const images: string[] = [];
 for (const p of inputs) {
   const full = resolve(p);
   if (existsSync(full) && statSync(full).isDirectory()) {
-    for (const f of readdirSync(full).filter((f) => f.endsWith(".png") && !f.endsWith("-bare.png")).sort()) images.push(join(full, f));
+    for (const f of readdirSync(full).filter((f) => f.endsWith(".png") && !f.endsWith("-bare.png") && (!width || f.includes(`-${width}-`))).sort()) images.push(join(full, f));
   } else images.push(full);
 }
 if (images.length === 0) {
-  console.error("usage: explain-score <png|dir> [...] [--model opus] [--json] [--min 8]");
+  console.error("usage: explain-score <png|dir> [...] [--final] [--jobs 4] [--json] [--min 8] [--draft-model sonnet] [--final-model opus] [--twosec-model sonnet]");
   process.exit(2);
 }
 
@@ -87,22 +99,28 @@ Question: from the composition alone, can the viewer point at what changed, or a
 Return only this JSON object, no prose:
 {"pass":true,"points_to":"what the eye lands on first","why":"one sentence"}`;
 
+const running = new Set<ChildProcess>();
+process.on("exit", () => running.forEach((c) => c.kill("SIGTERM")));
+
 function claude(args: string[], prompt: string): Promise<{ code: number; out: string; err: string }> {
   const env = { ...process.env };
   for (const k of ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"]) delete env[k];
   env.PATH = `/opt/homebrew/bin:${join(homedir(), ".local", "bin")}:${env.PATH ?? ""}`;
   return new Promise((res) => {
     const child = spawn("claude", [...args, prompt], { env, cwd: tmpdir(), stdio: ["ignore", "pipe", "pipe"] });
+    running.add(child);
     let out = "";
     let err = "";
     const timer = setTimeout(() => child.kill("SIGTERM"), 15 * 60_000);
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (err += d));
     child.on("error", (e) => {
+      running.delete(child);
       clearTimeout(timer);
       res({ code: 127, out: "", err: e.message });
     });
     child.on("close", (code) => {
+      running.delete(child);
       clearTimeout(timer);
       res({ code: code ?? 1, out, err });
     });
@@ -122,44 +140,65 @@ const firstJson = (raw: string): Record<string, unknown> | null => {
 
 const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : NaN);
 
-const scores: Scores[] = [];
+/** A missing quota or a bad answer ends the run with this exit code. */
+class Fatal extends Error {
+  constructor(
+    message: string,
+    readonly code: number,
+  ) {
+    super(message);
+  }
+}
+
+const QUOTA = /weekly limit|not logged in|invalid api key|Please run \/login/i;
+const empty = (file: string, notes: string): Scores => ({ file, realism: 0, legibility: 0, density: 0, journey: 0, metrics: 0, how: 0, clarity: 0, style: 0, overall: 0, notes });
+
 const twoFail: string[] = [];
-for (const file of images) {
-  process.stderr.write(`scoring ${file}\n`);
+
+/** Two-second test first, as a hard gate, then the rubric. One image, so images can run side by side. */
+async function scoreOne(file: string): Promise<Scores> {
   const bare = file.replace(/\.png$/, "-bare.png");
   if (existsSync(bare)) {
     const side = file.replace(/\.png$/, ".input.txt");
-    const t = await claude(["-p", "--model", model], TWO_SECOND(bare, existsSync(side) ? readFileSync(side, "utf8").trim() : ""));
+    const t = await claude(["-p", "--model", twoSecModel], TWO_SECOND(bare, existsSync(side) ? readFileSync(side, "utf8").trim() : ""));
     const tj = firstJson(t.out);
-    if (!tj || typeof tj.pass !== "boolean") {
-      console.error(`no two-second verdict for ${file} (exit ${t.code}): ${(t.out + t.err).trim().slice(0, 200)}`);
-      process.exit(/weekly limit|not logged in|Please run \/login/i.test(t.out + t.err) ? 2 : 1);
-    }
-    process.stderr.write(`  2s test ${tj.pass ? "PASS" : "FAIL"}: ${String(tj.points_to ?? "")} | ${String(tj.why ?? "")}\n`);
+    if (!tj || typeof tj.pass !== "boolean") throw new Fatal(`no two-second verdict for ${file} (exit ${t.code}): ${(t.out + t.err).trim().slice(0, 200)}`, QUOTA.test(t.out + t.err) ? 2 : 1);
+    process.stderr.write(`  2s test ${tj.pass ? "PASS" : "FAIL"} ${file.split("/").pop()}: ${String(tj.points_to ?? "")} | ${String(tj.why ?? "")}\n`);
     if (!tj.pass) {
       twoFail.push(file);
-      scores.push({ file, realism: 0, legibility: 0, density: 0, journey: 0, metrics: 0, how: 0, clarity: 0, style: 0, overall: 0, notes: `FAILED two-second test: ${String(tj.why ?? "")}`.slice(0, 200) });
-      continue;
+      return empty(file, `FAILED two-second test: ${String(tj.why ?? "")}`.slice(0, 200));
     }
   }
-  const r = await claude(["-p", "--model", model], PROMPT(file));
+  const r = await claude(["-p", "--model", rubricModel], PROMPT(file));
   // Claude Code prints settings warnings to stderr on every run; they are not the answer.
   const text = `${r.out}\n${r.err}`.split("\n").filter((l) => !/^Permission allow rule|^Unknown env config|^\s*$/.test(l)).join("\n");
-  const quota = /weekly limit|not logged in|invalid api key|Please run \/login/i;
-  if (quota.test(text)) {
-    const line = text.split("\n").find((l) => quota.test(l)) ?? "";
-    console.error(`claude login not usable (${line.trim().slice(0, 160)})`);
-    process.exit(2);
-  }
+  if (QUOTA.test(text)) throw new Fatal(`claude login not usable (${(text.split("\n").find((l) => QUOTA.test(l)) ?? "").trim().slice(0, 160)})`, 2);
   const o = firstJson(r.out);
-  if (!o || Number.isNaN(n(o.overall))) {
-    console.error(`no scores from opus for ${file} (exit ${r.code}): ${(r.out + r.err).trim().slice(0, 200)}`);
-    process.exit(1);
-  }
+  if (!o || Number.isNaN(n(o.overall))) throw new Fatal(`no scores from ${rubricModel} for ${file} (exit ${r.code}): ${(r.out + r.err).trim().slice(0, 200)}`, 1);
   const row: Scores = { file, realism: n(o.realism), legibility: n(o.legibility), density: n(o.density), journey: n(o.journey), metrics: n(o.metrics), how: n(o.how), clarity: n(o.clarity), style: n(o.style), overall: n(o.overall), notes: typeof o.notes === "string" ? o.notes : "" };
-  scores.push(row);
-  if (!json) process.stderr.write(`  overall ${row.overall}/10  ${row.notes}\n`);
+  if (!json) process.stderr.write(`  overall ${row.overall}/10 ${file.split("/").pop()}  ${row.notes}\n`);
+  return row;
 }
+
+const started = performance.now();
+process.stderr.write(`scoring ${images.length} image(s), ${jobs} at a time; two-second test ${twoSecModel}, rubric ${rubricModel}${final ? " (final)" : " (draft)"}\n`);
+const scores: Scores[] = new Array<Scores>(images.length);
+let next = 0;
+try {
+  await Promise.all(
+    Array.from({ length: Math.min(jobs, images.length) }, async () => {
+      while (next < images.length) {
+        const i = next++;
+        scores[i] = await scoreOne(images[i]!);
+      }
+    }),
+  );
+} catch (e) {
+  if (!(e instanceof Fatal)) throw e;
+  console.error(e.message);
+  process.exit(e.code);
+}
+process.stderr.write(`wall time ${((performance.now() - started) / 1000).toFixed(1)}s for ${images.length} image(s)\n`);
 
 const mean = (k: keyof Scores): number => scores.reduce((a, s) => a + (Number(s[k]) || 0), 0) / scores.length;
 if (json) {

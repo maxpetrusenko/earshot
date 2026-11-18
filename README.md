@@ -70,7 +70,7 @@ Tap either word (or open the URL). Audio starts while the memo is still being ma
 |---|---|---|
 | Claude Code, skill | `earshot install claude-code` | Claude ends its reply with one line: Listen · Original |
 | Claude Code, hook | `earshot install claude-code --mode hook` | Stop hook message in the terminal UI |
-| Orca chat (default in Orca) | `earshot run --format auto` | returns in under a second; an inline Web Audio player on Orca desktop (blank on iOS), a visual explanation of what changed when a picture helps, and the Listen · Original links last, all filled in by a background worker, see [Orca](docs/orca.md) |
+| Orca chat (default in Orca) | `earshot run --format auto` | returns in under a second; an inline Web Audio player on Orca desktop (one row: play or pause, a Listen / Original toggle, elapsed and total time; blank on iOS) and the Listen · Original links last, all filled in by a background worker. Add `--visual` for multi-step, UI, perf or architecture replies: the Explain line prints at once and the worker fills in the model's image, or a "what changed" card when the model draws nothing. See [Orca](docs/orca.md) |
 | Codex | `earshot install codex` | `notify` program, link in `~/.earshot/logs/hook.log` |
 | Any MCP client | `earshot install mcp --client claude-code` | the agent calls the `narrate` tool and prints the one-line links |
 | Anything else | `earshot run --from tagged` | reads the last `<narrate>...</narrate>` block from stdin |

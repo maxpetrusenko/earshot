@@ -39,12 +39,14 @@ export const b64 = (b: Buffer): string => b.toString("base64");
 const PAGE_CSS = `body{margin:0;font-family:var(--font-sans,system-ui);background:var(--background,#fff);color:var(--foreground,#171717)}
 html.ios,html.ios body{display:none;height:0;margin:0;padding:0;overflow:hidden}
 .bar{padding:6px 12px 8px;display:flex;flex-direction:column;gap:6px}
-#sk{width:100%;margin:0;height:4px;accent-color:var(--primary,#1f6f5c);cursor:pointer}
-.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ctl{display:flex;flex-wrap:nowrap;gap:10px;align-items:center}
 button{font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--border,#ddd);background:var(--secondary,#f4f4f4);color:var(--secondary-foreground,#171717);cursor:pointer}
-button.sel{border-color:var(--primary,#1f6f5c)}
+#pp{min-width:68px}
 button.on{background:var(--primary,#1f6f5c);color:var(--primary-foreground,#fff);border-color:transparent}
-#tm{margin-left:auto;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted-foreground,#666)}
+.tg{display:inline-flex;border:1px solid var(--border,#ddd);border-radius:999px;overflow:hidden}
+.tg button{border:0;border-radius:0;background:transparent}
+.tg button.sel{background:var(--primary,#1f6f5c);color:var(--primary-foreground,#fff)}
+#tm{margin-left:auto;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted-foreground,#666);white-space:nowrap}
 #st{font-size:13px;color:var(--destructive,#b42318)}#st:empty{display:none}`;
 
 /**
@@ -55,38 +57,35 @@ export const IOS_DETECT = `(function(){var n=navigator,u=n.userAgent||'';if(/iPh
 
 /**
  * Player script. Web Audio only: Orca's CSP blocks media data: URLs, so an audio element cannot play the embedded MP3.
- * Position is offset + (context time - start time) * rate; every seek, skip or speed change stops the source and restarts it.
+ * One row: play or pause, a Listen / Original toggle, elapsed and total time. Position is offset + (context time -
+ * start time); switching track stops the source and starts the other one at its own saved position.
  */
 const PAGE_JS = `if(document.documentElement.className!=='ios'){const A=__AUDIO__;
 const $=id=>document.getElementById(id);
-const be=$('be'),bo=$('bo'),bs=$('sk'),tm=$('tm'),st=$('st'),bb=$('bk'),bf=$('fw'),sp=$('sp');
-const names={e:'Play',o:'Original'},btn={e:be,o:bo},rates=[1,1.25,1.5,2];
-let ctx,gain,src=null,cur='e',ri=0,t0=0,drag=false;const off={e:0,o:0},buf={};
+const pp=$('pp'),be=$('be'),bo=$('bo'),tm=$('tm'),st=$('st');
+const btn={e:be,o:bo};
+let ctx,gain,src=null,cur='e',t0=0;const off={e:0,o:0},buf={};
 const fmt=s=>{s=Math.floor(s||0);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 const dur=()=>buf[cur]?buf[cur].duration:0;
-const pos=()=>src?Math.min(dur(),off[cur]+(ctx.currentTime-t0)*rates[ri]):off[cur];
-function ui(){const p=pos(),d=dur();for(const k in btn){if(!btn[k])continue;const on=!!src&&cur===k;btn[k].textContent=on?'Pause':names[k];btn[k].className=on?'on':cur===k?'sel':''}
-if(!drag)bs.value=d?Math.round(p/d*1000):0;tm.textContent=fmt(drag?bs.value/1000*d:p)+' / '+fmt(d);sp.textContent=rates[ri]+'x'}
+const pos=()=>src?Math.min(dur(),off[cur]+(ctx.currentTime-t0)):off[cur];
+function ui(){pp.textContent=src?'Pause':'Play';pp.className=src?'on':'';
+for(const k in btn){if(!btn[k])continue;const on=cur===k;btn[k].className=on?'sel':'';btn[k].setAttribute('aria-pressed',on)}
+tm.textContent=fmt(pos())+' / '+fmt(dur())}
 function halt(){if(src){off[cur]=pos();src.onended=null;try{src.stop()}catch(_){}src.disconnect();src=null}}
-function begin(){const s=ctx.createBufferSource();s.buffer=buf[cur];s.playbackRate.value=rates[ri];s.connect(gain);t0=ctx.currentTime;s.onended=()=>{if(src===s){src=null;off[cur]=0;ui()}};src=s;s.start(0,off[cur])}
-function pause(){halt();ui()}
-function play(k){if(src&&cur===k)return pause();halt();cur=k;if(off[k]>=buf[k].duration-0.05)off[k]=0;begin();ui()}
-function seek(s){const was=!!src;halt();off[cur]=Math.max(0,Math.min(dur()-0.01,s));if(was)begin();ui()}
+function begin(){const s=ctx.createBufferSource();s.buffer=buf[cur];s.connect(gain);t0=ctx.currentTime;s.onended=()=>{if(src===s){src=null;off[cur]=0;ui()}};src=s;s.start(0,off[cur])}
+function toggle(){if(src){halt();ui();return}if(off[cur]>=buf[cur].duration-0.05)off[cur]=0;begin();ui()}
+function pick(k){const was=!!src;halt();cur=k;if(off[k]>=buf[k].duration-0.05)off[k]=0;if(was)begin();ui()}
 async function load(){const C=window.AudioContext||window.webkitAudioContext;ctx=new C();gain=ctx.createGain();gain.gain.value=typeof window.__earshotGain==='number'?window.__earshotGain:1;gain.connect(ctx.destination);
 for(const k in A){const bin=atob(A[k]),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);buf[k]=await ctx.decodeAudioData(u.buffer)}ui()}
 const fail=x=>{st.textContent='Audio error: '+(x&&x.name||'')+' '+(x&&x.message||'')};
 const ready=load().catch(x=>{fail(x)});
 const act=f=>()=>{try{if(ctx)ctx.resume().catch(fail);if(buf.e)f();else ready.then(()=>{if(buf.e)f()}).catch(fail)}catch(x){fail(x)}};
-be.onclick=act(()=>play('e'));if(bo)bo.onclick=act(()=>play('o'));
-bb.onclick=act(()=>seek(pos()-10));bf.onclick=act(()=>seek(pos()+10));
-sp.onclick=act(()=>{const p=pos(),was=!!src;halt();off[cur]=p;ri=(ri+1)%rates.length;if(was)begin();ui()});
-bs.oninput=()=>{drag=true;ui()};
-bs.onchange=act(()=>{drag=false;seek(bs.value/1000*dur())});
-document.addEventListener('keydown',e=>{if(e.code!=='Space'||e.target.tagName==='BUTTON')return;e.preventDefault();act(()=>play(cur))()});
+pp.onclick=act(toggle);be.onclick=act(()=>pick('e'));if(bo)bo.onclick=act(()=>pick('o'));
+document.addEventListener('keydown',e=>{if(e.code!=='Space'||e.target.tagName==='BUTTON')return;e.preventDefault();act(toggle)()});
 setInterval(()=>{if(buf.e&&src)ui()},100)}`;
 
 /**
- * The player page: a compact control bar and nothing else, no title and no image. On iOS it collapses to zero height.
+ * The player page: one compact row and nothing else, no title and no image. On iOS it collapses to zero height.
  * Theme tokens are read with fallbacks and never redefined; there is no network access and no 100vh.
  */
 export function renderPlayerHtml(p: PageInput): string {
@@ -97,8 +96,7 @@ export function renderPlayerHtml(p: PageInput): string {
 <style>
 ${PAGE_CSS}
 </style></head><body tabindex="0">
-<div class="bar"><input id="sk" type="range" min="0" max="1000" value="0" aria-label="Seek">
-<div class="ctl"><button class="sel" id="be">Play</button>${orig ? '<button id="bo">Original</button>' : ""}<button id="bk" aria-label="Back 10 seconds">-10</button><button id="fw" aria-label="Forward 10 seconds">+10</button><button id="sp" aria-label="Speed">1x</button><span id="tm">0:00 / 0:00</span></div>
+<div class="bar"><div class="ctl"><button id="pp" aria-label="Play or pause">Play</button><div class="tg" role="group" aria-label="Track">${orig ? '<button class="sel" id="be" aria-pressed="true">Listen</button><button id="bo" aria-pressed="false">Original</button>' : '<button class="sel" id="be" aria-pressed="true">Listen</button>'}</div><span id="tm">0:00 / 0:00</span></div>
 <div id="st">${p.note ? escapeHtml(p.note) : ""}</div></div>
 <script>
 ${PAGE_JS.replace("__AUDIO__", () => audio)}
@@ -203,9 +201,19 @@ export const PENDING_RELOAD_MS = 120_000;
  * network, so the page cannot fetch anything; it only reloads itself while the file may still change.
  * The explain placeholder is collapsed to nothing, like the player on iOS, so an unused one shows no empty frame.
  */
-export function renderPendingHtml(kind: OrcaKind, o: { note?: string; reload?: boolean; madeAt?: number } = {}): string {
+export function renderPendingHtml(kind: OrcaKind, o: { note?: string; reload?: boolean; madeAt?: number; visible?: boolean } = {}): string {
   const madeAt = o.madeAt ?? Date.now();
   const reload = o.reload !== false ? `<script>(function(){if(Date.now()-${madeAt}<${PENDING_RELOAD_MS})setTimeout(function(){location.reload()},1500)})();</script>` : "";
+  // `--visual` prints the Explain line before any picture exists, so its stand-in is a visible note, not a collapsed frame.
+  if (kind !== "player" && o.visible) {
+    const note = o.note ?? "Drawing the picture.";
+    return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+${PAGE_CSS}
+#st{color:var(--muted-foreground,#666);display:block}
+</style></head><body><div class="bar"><div id="st">${escapeHtml(note)}</div></div>${reload}</body></html>
+`;
+  }
   if (kind === "explain") return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{display:none;height:0;margin:0;padding:0;overflow:hidden}</style></head><body>${reload}</body></html>\n`;
   const note = o.note ?? "Preparing audio. The Listen link works now.";
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

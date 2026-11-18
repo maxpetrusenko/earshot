@@ -64,12 +64,19 @@ describe("renderPlayerHtml", () => {
     expect(html).toContain("createBufferSource");
     expect(html).toContain('{e:"AAAA",o:"BBBB"}');
   });
-  it("is the control bar only: no title, no image", () => {
-    for (const id of ["be", "bo", "sk", "bk", "fw", "sp", "tm", "st"]) expect(html).toContain(`id="${id}"`);
+  it("is one compact row: play or pause, a Listen / Original toggle, elapsed and total time", () => {
+    for (const id of ["pp", "be", "bo", "tm", "st"]) expect(html).toContain(`id="${id}"`);
+    expect(html).toContain(">Listen</button>");
+    expect(html).toContain(">Original</button>");
     expect(html).toContain("font-size:13px;padding:6px 12px");
     expect(html).not.toContain('class="ti"');
-    expect(html).not.toContain('class="sk"');
     expect(html).not.toContain("<svg");
+  });
+  it("has no seek bar, no 10 second skip and no speed control", () => {
+    for (const id of ["sk", "bk", "fw", "sp"]) expect(html).not.toContain(`id="${id}"`);
+    expect(html).not.toContain('type="range"');
+    expect(html).not.toContain("playbackRate");
+    expect(html).not.toContain("rates");
   });
   it("detects iOS and iPadOS and collapses to nothing there", () => {
     expect(html).toContain("iPhone|iPad|iPod");

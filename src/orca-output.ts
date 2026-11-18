@@ -14,22 +14,28 @@ export interface OrcaJob {
   dir: string;
   /** The worker should also render each explain page as a PNG next to the scratch dir. */
   png: boolean;
+  /** `--visual`: the Explain line is already in the chat with a placeholder page; the worker writes the real page over it. */
+  visual?: boolean;
 }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
- * The chat lines for a brief whose player is still being made: the player, then the links last. There is never an
- * Explain line here. Whether the model draws an image is only known seconds later, and a line that can end up an
- * empty card is worse than no line; the image goes on the card page (the link page) instead.
+ * The chat lines for a brief whose player is still being made: the player, then the links last. Without `visual`
+ * there is never an Explain line: whether the model draws an image is only known seconds later, and a line that can
+ * end up an empty card is worse than no line; the image goes on the card page (the link page) instead. With `visual`
+ * the caller asked for a picture, so the Explain line comes right after the player and the worker guarantees a page
+ * behind it: the model's image, or a deterministic "what changed" card.
  */
-export function orcaLines(id: string, base: string): string {
-  return [orcaLine(`earshot-${id}-player.html`), listenMarkdown(briefLinks(base, id))].join("\n");
+export function orcaLines(id: string, base: string, visual = false): string {
+  return [orcaLine(`earshot-${id}-player.html`), ...(visual ? [orcaLine(`earshot-${id}-explain.html`, "Explain")] : []), listenMarkdown(briefLinks(base, id))].join("\n");
 }
 
-/** Write the player stand-in before the line is printed, so Orca finds a file the moment it renders the reply. */
-export function writeOrcaPlaceholders(dir: string, id: string): void {
-  writeOrcaPage(dir, id, renderPendingHtml("player", { madeAt: Date.now() }), "player");
+/** Write the stand-ins before the lines are printed, so Orca finds a file the moment it renders the reply. */
+export function writeOrcaPlaceholders(dir: string, id: string, visual = false): void {
+  const madeAt = Date.now();
+  writeOrcaPage(dir, id, renderPendingHtml("player", { madeAt }), "player");
+  if (visual) writeOrcaPage(dir, id, renderPendingHtml("explain", { madeAt, visible: true }), "explain");
 }
 
 /** Encode the finished tracks into one inline page. Throws with the reason when there is nothing to play. */
@@ -62,6 +68,17 @@ export async function finishPlayer(dir: string, id: string, log: (l: string) => 
 
 /** Optional PNGs of the finished explain pages (`--explain-png`), written next to the player in the scratch dir. */
 export async function finishExplain(job: OrcaJob, id: string, htmls: string[], log: (l: string) => void): Promise<void> {
+  if (job.visual) {
+    for (const [i, html] of htmls.entries()) {
+      const kind = EXPLAIN_KINDS[i];
+      if (!kind) break;
+      try {
+        log(`orca page ${writeOrcaPage(job.dir, id, html, kind)}`);
+      } catch (e) {
+        log(`orca explain page failed: ${msg(e)}`);
+      }
+    }
+  }
   if (!job.png) return;
   for (const [i, html] of htmls.entries()) {
     const kind = EXPLAIN_KINDS[i];
