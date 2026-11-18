@@ -1,3 +1,4 @@
+import type { Layer } from "./explain-cards-schema.js";
 import type { ExplainSpec, Panel } from "./explain-schema.js";
 
 /** A node name that names nothing. */
@@ -19,6 +20,16 @@ export function cardLabels(p: Panel): string[] {
 
 /** True for panels drawn as cards, a range axis or layers. */
 export const isCardPanel = (p: Panel | undefined): boolean => p?.kind === "cards" || p?.kind === "range" || p?.kind === "layers";
+
+const sig = (t: string): string[] => (t.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((w) => !["and", "the", "for", "with"].includes(w));
+
+/** True when an arrow label mostly repeats names already drawn in the box above or below it. */
+export function linkRepeats(link: string, above: Layer, below: Layer): boolean {
+  const own = sig(link);
+  if (own.length < 2) return false;
+  const seen = new Set([above, below].flatMap((l) => [l.name, l.detail, ...l.items.flatMap((i) => [i.name, i.detail])]).flatMap(sig));
+  return own.filter((w) => seen.has(w)).length / own.length >= 0.5;
+}
 
 const words = (t: string): number => t.split(/\s+/).filter(Boolean).length;
 
@@ -50,6 +61,7 @@ export function cardsGate(spec: ExplainSpec): string | null {
       if (!p.unit) return "a range chart needs the unit the reply uses";
       if (p.rows.length < 2) return "a range chart needs at least two rows with numbers from the reply; with no timings or values there is no axis, so use a card type or return no_image";
       if (p.rows.some((r) => !r.label)) return "every row needs a label";
+      if (!/\d/.test(spec.title)) return 'a range chart headline must use the reply\'s own numbers, for example "Invoice list: 1.8 s to 240 ms."';
       return null;
     }
     case "layers": {
@@ -60,6 +72,8 @@ export function cardsGate(spec: ExplainSpec): string | null {
       const bare = nodes.find((n) => !n.icon);
       if (bare) return `"${bare.name}" needs an icon from the allowed list`;
       if (!p.layers.slice(0, -1).some((l) => l.link)) return "label what travels between the layers on at least one arrow";
+      const dup = p.layers.findIndex((l, i) => i < p.layers.length - 1 && l.link && linkRepeats(l.link, l, p.layers[i + 1]!));
+      if (dup >= 0) return `the arrow label "${p.layers[dup]!.link}" repeats names already drawn in the boxes; say what travels (a protocol or a verb), not the capabilities`;
       return null;
     }
     default:

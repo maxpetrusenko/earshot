@@ -1,4 +1,4 @@
-import { arr, cleanText, num, oneOf, padDecimals, rangeText, rec } from "./explain-util.js";
+import { arr, cleanText, cleanWords, num, oneOf, padDecimals, rangeText, rec } from "./explain-util.js";
 
 /**
  * Panels of the reference style: one concept per image, a few labeled cards. The model returns data only.
@@ -42,6 +42,8 @@ export interface RangeRow {
   /** Printed value, for example "about 60 s". Drawn from the numbers when empty. */
   text: string;
   tone: Tone;
+  /** A second measure tied to this row, for example "201 queries": the cause next to the number it explains. */
+  note: string;
 }
 export interface RangePanel {
   kind: "range";
@@ -74,14 +76,14 @@ export interface LayersPanel {
   layers: Layer[];
 }
 
-/** Axis end and ticks: the smallest 1, 2 or 5 step that reaches the largest value in at most four steps. */
+/** Axis end and ticks: the smallest 1, 2 or 5 step that reaches the largest value in at most three steps, so tick labels never crowd. */
 export function niceAxis(max: number): { axisMax: number; ticks: number[] } {
   const top = max > 0 ? max : 1;
   for (let k = -3; k < 12; k++) {
     for (const m of [1, 2, 5]) {
       const step = m * 10 ** k;
       const n = Math.ceil(top / step - 1e-9);
-      if (n <= 4) {
+      if (n <= 3) {
         const ticks = Array.from({ length: n + 1 }, (_, i) => Math.round(i * step * 1e6) / 1e6);
         return { axisMax: ticks[n]!, ticks };
       }
@@ -115,7 +117,7 @@ export function rangePanel(p: Record<string, unknown>): RangePanel {
     const from = num(r.from ?? r.value, 0, 1e9, NaN);
     if (Number.isNaN(from)) continue;
     const to = Math.max(from, num(r.to, 0, 1e9, from));
-    rows.push({ label: cleanText(r.label, 24), from, to, open: r.open === true, text: rangeText(r.text, 30), tone: oneOf(r.tone, TONES, "neutral") });
+    rows.push({ label: cleanText(r.label, 24), from, to, open: r.open === true, text: rangeText(r.text, 30), tone: oneOf(r.tone, TONES, "neutral"), note: cleanWords(r.note, 24) });
   }
   // An open row needs headroom past its number so the open end has somewhere to go.
   const { axisMax, ticks } = niceAxis(rows.reduce((m, r) => Math.max(m, r.open ? r.to * 1.3 : r.to), 0));
@@ -134,7 +136,7 @@ export function layersPanel(p: Record<string, unknown>): LayersPanel {
     const base = item(r, 30, 60);
     if (!base.name) continue;
     const items = arr(r.items).slice(0, 4).map((i) => item(i, 18, 24)).filter((i) => i.name);
-    layers.push({ ...base, link: cleanText(r.link, 30), core: r.core === true, items });
+    layers.push({ ...base, link: cleanWords(r.link, 40), core: r.core === true, items });
   }
   return { kind: "layers", label: "", caption: "", layers };
 }

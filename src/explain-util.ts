@@ -20,6 +20,15 @@ export function cleanText(v: unknown, max: number): string {
     .trim();
 }
 
+/** Like cleanText, but a label that is too long is cut at a word boundary, never mid-word ("observe actio"). */
+export function cleanWords(v: unknown, max: number): string {
+  const full = cleanText(v, 400);
+  if (full.length <= max) return full;
+  const cut = full.slice(0, max + 1);
+  const at = cut.lastIndexOf(" ");
+  return (at > 0 ? cut.slice(0, at) : full.slice(0, max)).replace(/[\s,/;:]+$/, "");
+}
+
 export const rec = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
 export const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 export const num = (v: unknown, lo: number, hi: number, dflt: number): number => {
