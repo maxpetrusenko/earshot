@@ -5,31 +5,31 @@ import { explainPng } from "./explain-png.js";
 import { fitOrcaPage, orcaDir, orcaLine, pageTitle, renderPendingHtml, writeOrcaPage, type Fitted, type OrcaKind } from "./orca.js";
 
 /** Explainer v2 makes up to three pages per reply; each has its own file. */
-export const EXPLAIN_KINDS: readonly OrcaKind[] = ["explain", "explain2", "explain3"];
+const EXPLAIN_KINDS: readonly OrcaKind[] = ["explain", "explain2", "explain3"];
 
-/** Replies shorter than this get no explain line: the explain stage answers "no image" for them anyway. */
+/** Replies shorter than this are not sent to the explain stage: it answers "no image" for them anyway. */
 export const EXPLAIN_MIN_CHARS = 500;
 
 export interface OrcaJob {
   dir: string;
-  /** An explain placeholder was printed, so the worker owes that file a final version. */
-  explain: boolean;
+  /** The worker should also render each explain page as a PNG next to the scratch dir. */
   png: boolean;
 }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** The chat lines for a brief whose pages are still being made: player, optional explain, then the links last. */
-export function orcaLines(id: string, base: string, withExplain: boolean): string {
-  const links = briefLinks(base, id);
-  return [orcaLine(`earshot-${id}-player.html`), ...(withExplain ? EXPLAIN_KINDS.map((k) => orcaLine(`earshot-${id}-${k}.html`, "Explain")) : []), listenMarkdown(links)].join("\n");
+/**
+ * The chat lines for a brief whose player is still being made: the player, then the links last. There is never an
+ * Explain line here. Whether the model draws an image is only known seconds later, and a line that can end up an
+ * empty card is worse than no line; the image goes on the card page (the link page) instead.
+ */
+export function orcaLines(id: string, base: string): string {
+  return [orcaLine(`earshot-${id}-player.html`), listenMarkdown(briefLinks(base, id))].join("\n");
 }
 
-/** Write the stand-in pages before the line is printed, so Orca finds a file the moment it renders the reply. */
-export function writeOrcaPlaceholders(dir: string, id: string, withExplain: boolean): void {
-  const madeAt = Date.now();
-  writeOrcaPage(dir, id, renderPendingHtml("player", { madeAt }), "player");
-  if (withExplain) for (const k of EXPLAIN_KINDS) writeOrcaPage(dir, id, renderPendingHtml("explain", { madeAt }), k);
+/** Write the player stand-in before the line is printed, so Orca finds a file the moment it renders the reply. */
+export function writeOrcaPlaceholders(dir: string, id: string): void {
+  writeOrcaPage(dir, id, renderPendingHtml("player", { madeAt: Date.now() }), "player");
 }
 
 /** Encode the finished tracks into one inline page. Throws with the reason when there is nothing to play. */
@@ -60,24 +60,16 @@ export async function finishPlayer(dir: string, id: string, log: (l: string) => 
   }
 }
 
-/**
- * Replace the explain placeholders: page k for visual k, and the unused ones collapsed for good (an empty
- * placeholder shows no frame). With no visuals at all, every placeholder collapses.
- */
+/** Optional PNGs of the finished explain pages (`--explain-png`), written next to the player in the scratch dir. */
 export async function finishExplain(job: OrcaJob, id: string, htmls: string[], log: (l: string) => void): Promise<void> {
-  if (!job.explain) return;
-  for (const [i, kind] of EXPLAIN_KINDS.entries()) {
-    const html = htmls[i];
+  if (!job.png) return;
+  for (const [i, html] of htmls.entries()) {
+    const kind = EXPLAIN_KINDS[i];
+    if (!kind) break;
     try {
-      if (!html) {
-        writeOrcaPage(job.dir, id, renderPendingHtml("explain", { reload: false }), kind);
-        continue;
-      }
-      const file = writeOrcaPage(job.dir, id, html, kind);
-      log(`orca page ${file}`);
-      if (job.png) log(`explain png ${await explainPng(html, join(job.dir, file.replace(/\.html$/, ".png")))}`);
+      log(`explain png ${await explainPng(html, join(job.dir, `earshot-${id}-${kind}.png`))}`);
     } catch (e) {
-      log(`explain ${kind} failed: ${msg(e)}`);
+      log(`explain png failed: ${msg(e)}`);
     }
   }
 }

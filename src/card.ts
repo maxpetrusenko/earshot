@@ -19,7 +19,7 @@ const AGENTS: Record<string, string> = { stdin: "Agent report", "claude-code": "
  * The card page. Every dynamic string is escaped here; the page has no inline script or style,
  * so the strict CSP holds. `script` is embedded as the transcript (script.md is never served).
  */
-export function renderCard(meta: Meta, script: string | null): string {
+export function renderCard(meta: Meta, script: string | null, explainPages = 0): string {
   const id = meta.id;
   const e = escapeHtml;
   const base = `/b/${id}`;
@@ -43,6 +43,11 @@ export function renderCard(meta: Meta, script: string | null): string {
 
   const sketch = meta.image
     ? `<section class="sketch"><img src="${base}/sketch.svg" alt="${e(`Sketch: ${meta.title}`)}"></section>`
+    : "";
+
+  // The explanation images live here, not in the chat: whether the model drew any is only known after the reply was printed.
+  const explain = explainPages > 0
+    ? `<section class="explain"><h2>What changed</h2>${Array.from({ length: explainPages }, (_, i) => `<p><a href="${base}/explain${i === 0 ? "" : i + 1}.html">Explanation${explainPages > 1 ? ` ${i + 1}` : ""}</a></p>`).join("")}</section>`
     : "";
 
   const evidence = meta.evidence
@@ -74,6 +79,7 @@ export function renderCard(meta: Meta, script: string | null): string {
 <header><h1>${e(heading)}</h1><p class="byline">${e(byline)}</p></header>
 ${meta.status === "failed" ? error : player}
 ${sketch}
+${explain}
 ${evidence}
 ${transcript}
 </main>

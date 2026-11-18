@@ -31,7 +31,7 @@ export interface Detached {
 export function startDetached(cfg: Config, raw: string, o: { from: string; session?: string; title?: string; evidence?: string; configPath?: string; orca?: { dir: string; explain: boolean; png: boolean }; log?: (l: string) => void }): Detached {
   const prepared = prepareBrief(cfg, raw, o);
   // The stand-in pages exist before the worker starts, so a fast worker can never be overwritten by them.
-  if (o.orca) writeOrcaPlaceholders(o.orca.dir, prepared.meta.id, o.orca.explain);
+  if (o.orca) writeOrcaPlaceholders(o.orca.dir, prepared.meta.id);
   mkdirSync(logsDir(), { recursive: true, mode: 0o700 });
   const log = join(logsDir(), `${prepared.meta.id}.log`);
   const fd = openSync(log, "a", 0o600);

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -39,12 +39,8 @@ describe("pending pages", () => {
   it("the explain stand-in shows nothing", () => {
     expect(renderPendingHtml("explain", { reload: false })).toContain("display:none");
   });
-  it("orcaLines prints the player line, the optional explain line, then the links last", () => {
-    expect(orcaLines("abc", "http://h", false).split("\n")).toEqual(['::orca-visual{file="earshot-abc-player.html" title="Listen"}', "[Listen](http://h/b/abc/edited.mp3) \u00b7 [Original](http://h/b/abc/original.mp3)"]);
-    const withExplain = orcaLines("abc", "http://h", true).split("\n");
-    expect(withExplain).toHaveLength(5); // explainer v2 can make up to three pages; unused ones collapse
-    expect(withExplain[1]).toBe('::orca-visual{file="earshot-abc-explain.html" title="Explain"}');
-    expect(withExplain[3]).toBe('::orca-visual{file="earshot-abc-explain3.html" title="Explain"}');
+  it("orcaLines prints the player line and the links, and never an Explain line", () => {
+    expect(orcaLines("abc", "http://h").split("\n")).toEqual(['::orca-visual{file="earshot-abc-player.html" title="Listen"}', "[Listen](http://h/b/abc/edited.mp3) \u00b7 [Original](http://h/b/abc/original.mp3)"]);
   });
   it("writeOrcaPage replaces a file in place and leaves no temp file", () => {
     const d = mkdtempSync(join(tmpdir(), "earshot-orca-w-"));
@@ -223,10 +219,10 @@ describe("earshot run --format orca", () => {
       const elapsed = Date.now() - t0;
       expect(inOrca.status).toBe(0);
       const lines = inOrca.stdout.split("\n").filter(Boolean);
-      expect(lines).toHaveLength(5); // the report is long enough for explain lines (three stand-ins)
+      expect(lines).toHaveLength(2); // long reply, but no Explain line: an image may or may not come
       expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
-      expect(lines[1]).toMatch(/-explain\.html" title="Explain"/);
-      expect(lines[4]).toMatch(/^\[Listen\]\(/);
+      expect(lines[1]).toMatch(/^\[Listen\]\(/);
+      expect(inOrca.stdout).not.toMatch(/explain/i);
       expect(inOrca.stderr).not.toMatch(/orca encode/); // it did not wait for the audio
       expect(elapsed).toBeLessThan(15000);
       // the worker then replaces the stand-in with the finished player
@@ -234,13 +230,15 @@ describe("earshot run --format orca", () => {
       const player = readFileSync(playerOf(d), "utf8");
       expect(player).not.toContain("Preparing audio");
       expect(statSync(playerOf(d)).size).toBeLessThan(ORCA_BUDGET_BYTES);
-      const explain = join(d, readdirSync(d).find((f) => f.endsWith("-explain.html"))!);
-      expect(await until(() => !readFileSync(explain, "utf8").includes("location.reload()"))).toBe(true); // no image: stays collapsed, stops reloading
+      expect(readdirSync(d).filter((f) => f.includes("-explain"))).toEqual([]); // no explain file in the chat scratch dir, ever
+      const id = /earshot-([A-Za-z0-9]+)-player/.exec(lines[0]!)![1]!;
+      expect(await until(() => existsSync(join(home, "briefs", id, "meta.json")) && JSON.parse(readFileSync(join(home, "briefs", id, "meta.json"), "utf8")).status === "ready")).toBe(true);
+      expect(readFileSync(join(home, "briefs", id, "card.html"), "utf8")).not.toContain("What changed"); // NO_IMAGE: no empty section either
     } finally {
       await new Promise((r) => setTimeout(r, 300));
       rmSync(d, { recursive: true, force: true });
     }
-  });
+  }, 60000);
   it("auto does not print an explain line for a short reply", async () => {
     const d = mkdtempSync(join(tmpdir(), "earshot-orca-short-"));
     try {
@@ -299,7 +297,7 @@ describe("earshot run --format orca", () => {
     const r = await run(["--format", "orca", "--detach"]);
     expect(r.status).toBe(2);
   });
-  it("a change worth a picture adds an explain page: player line, explain line, then the links last", async () => {
+  it("a change worth a picture adds no chat line: the page goes on the card", async () => {
     const p = await startFakeProvider({ explain: EXPLAIN_SPEC });
     const cfg2 = join(home, "cfg2.yaml");
     writeFileSync(cfg2, `llm:\n  type: openai-compatible\n  base_url: ${p.url}\n  model: fake\ntts:\n  base_url: ${p.url}\nserve:\n  mode: loopback\n  port: 17778\n`);
@@ -315,24 +313,23 @@ describe("earshot run --format orca", () => {
         child.stdin.end(report);
       });
       const lines = r.trim().split("\n");
-      expect(lines).toHaveLength(5); // player, three explain stand-ins, links
-      expect(await until(() => readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-explain.html"))!), "utf8").includes("Retries now stop at five"))).toBe(true);
-      expect(await until(() => readFileSync(playerOf(d2), "utf8").includes("decodeAudioData"))).toBe(true);
+      expect(lines).toHaveLength(2); // player, links
       expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
-      expect(lines[1]).toMatch(/-explain\.html" title="Explain"/);
-      expect(lines[4]).toMatch(/^\[Listen\]\(/);
-      const page = readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-explain.html"))!), "utf8");
+      expect(lines[1]).toMatch(/^\[Listen\]\(/);
+      expect(await until(() => readFileSync(playerOf(d2), "utf8").includes("decodeAudioData"))).toBe(true);
+      const id = /earshot-([A-Za-z0-9]+)-player/.exec(lines[0]!)![1]!;
+      expect(await until(() => existsSync(join(home, "briefs", id, "explain.html")) && readFileSync(join(home, "briefs", id, "card.html"), "utf8").includes("/explain.html"))).toBe(true);
+      const page = readFileSync(join(home, "briefs", id, "explain.html"), "utf8");
       expect(page).toContain("Retries now stop at five");
-      expect(page).not.toContain("decodeAudioData");
-      expect(page).not.toContain("html.ios");
-      const player = readFileSync(join(d2, readdirSync(d2).find((f) => f.endsWith("-player.html"))!), "utf8");
+      const player = readFileSync(playerOf(d2), "utf8");
       expect(player).not.toContain("Retries now stop at five");
+      expect(readdirSync(d2).filter((f) => f.includes("-explain"))).toEqual([]);
     } finally {
       p.server.close();
       rmSync(d2, { recursive: true, force: true });
     }
   });
-  it("three visuals become three explain pages, stand-ins first, each replaced by its own page", async () => {
+  it("three visuals become three explain pages on the card, none in chat", async () => {
     const titles = ["Retries now stop at five", "Customer names load together", "Dead letter after five tries"];
     const p = await startFakeProvider({ explain: { visuals: titles.map((title) => ({ ...EXPLAIN_SPEC, no_image: false, title })) } });
     const cfg3 = join(home, "cfg3.yaml");
@@ -349,15 +346,11 @@ describe("earshot run --format orca", () => {
         child.stdin.end(report);
       });
       const lines = r.trim().split("\n");
-      expect(lines).toHaveLength(5); // player, three explain pages, links last
-      expect(lines[0]).toMatch(/-player\.html" title="Listen"/);
-      for (const i of [1, 2, 3]) expect(lines[i]).toContain('title="Explain"'); // headlines are unknown until the call returns
-      expect(lines[4]).toMatch(/^\[Listen\]\(/);
-      expect(await until(() => readdirSync(d3).some((f) => f.endsWith("-explain3.html")) && readFileSync(join(d3, readdirSync(d3).find((f) => f.endsWith("-explain3.html"))!), "utf8").includes("Dead letter after five tries"))).toBe(true);
-      const files = readdirSync(d3);
-      for (const kind of ["explain", "explain2", "explain3"]) expect(files.some((f) => f.endsWith(`-${kind}.html`))).toBe(true);
-      const third = readFileSync(join(d3, files.find((f) => f.endsWith("-explain3.html"))!), "utf8");
-      expect(third).toContain("<h1>Dead letter after five tries</h1>");
+      expect(lines).toHaveLength(2);
+      const id = /earshot-([A-Za-z0-9]+)-player/.exec(lines[0]!)![1]!;
+      expect(await until(() => existsSync(join(home, "briefs", id, "explain3.html")) && readFileSync(join(home, "briefs", id, "card.html"), "utf8").includes("explain3.html"))).toBe(true);
+      expect(readFileSync(join(home, "briefs", id, "explain3.html"), "utf8")).toContain("<h1>Dead letter after five tries</h1>");
+      expect(readdirSync(d3).filter((f) => f.includes("-explain"))).toEqual([]);
     } finally {
       p.server.close();
       rmSync(d3, { recursive: true, force: true });

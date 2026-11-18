@@ -120,10 +120,11 @@ async function runCommand(flags: RunFlags): Promise<number> {
     process.stdout.write(asJson ? `${JSON.stringify({ listen: l.listen, listen_original: l.listen_original, card: l.card, id: l.id })}\n` : `${flags.format === "plain" ? listenLines(l) : listenMarkdown(l)}\n`);
   };
   if (inline) {
+    // The explain page is still made (card page, optional PNG) when the reply is long enough; it is never printed as a chat line.
     const withExplain = flags.sketch && flags.explain && cfg.image.type !== "none" && input.text.length >= EXPLAIN_MIN_CHARS;
     const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, orca: { dir: scratch!, explain: withExplain, png: flags.explainPng === true }, log });
     log(`worker pid ${job.pid}, log ${job.log}`);
-    process.stdout.write(`${orcaLines(job.prepared.meta.id, await cachedBaseUrl(cfg.serve), withExplain)}\n`);
+    process.stdout.write(`${orcaLines(job.prepared.meta.id, await cachedBaseUrl(cfg.serve))}\n`);
     return 0;
   }
   if (flags.detach) {
@@ -231,7 +232,7 @@ program
   .description("finish a pending brief (started by --detach and the Stop hook)")
   .option("--title <text>", "title override (from the MCP narrate tool)")
   .option("--orca-dir <path>", "write the Orca player page (and explain page) here when the audio is ready")
-  .option("--orca-explain", "an explain placeholder was printed: make the explain page")
+  .option("--orca-explain", "also make the explain pages (they go on the card page)")
   .option("--explain-png", "with --orca-explain: also render the PNG")
   .option("--config <path>", "alternate config file")
   .action(async (id: string, o: { config?: string; title?: string; orcaDir?: string; orcaExplain?: boolean; explainPng?: boolean }) => {
@@ -242,17 +243,16 @@ program
       process.exitCode = 2;
       return;
     }
-    const orca: OrcaJob | null = o.orcaDir ? { dir: o.orcaDir, explain: o.orcaExplain === true, png: o.explainPng === true } : null;
+    const orca: OrcaJob | null = o.orcaDir ? { dir: o.orcaDir, png: o.explainPng === true } : null;
     let playerDone = false;
-    let explainDone = false;
     try {
       const r = await executeBrief(cfg, createLlm(cfg.llm), prep, {
         from: prep.meta.source.from,
         title: o.title,
         log,
-        ...(orca ? { explain: orca.explain, waitForAudio: true } : {}),
+        ...(orca ? { explain: o.orcaExplain === true, waitForAudio: true } : {}),
         onAudioReady: orca ? (async () => { playerDone = true; await finishPlayer(orca.dir, id, log); }) : undefined,
-        onExplain: orca ? (async (htmls) => { explainDone = true; await finishExplain(orca, id, htmls, log); }) : undefined,
+        onExplain: orca ? (async (htmls) => { await finishExplain(orca, id, htmls, log); }) : undefined,
       });
       log(`${r.meta.status} in ${r.meta.total_ms}ms`);
     } catch (e) {
@@ -262,7 +262,6 @@ program
     } finally {
       // A placeholder must never be left asking for a file that will not come.
       if (orca && !playerDone) await finishPlayer(orca.dir, id, log);
-      if (orca && !explainDone) await finishExplain(orca, id, [], log);
     }
   });
 
