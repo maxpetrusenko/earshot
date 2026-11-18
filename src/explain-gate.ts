@@ -1,3 +1,4 @@
+import { cardLabels, cardsGate, isCardPanel } from "./explain-cards-gate.js";
 import type { ExplainSpec, Panel } from "./explain-schema.js";
 
 /** Labels that say a thing happened without showing it. As a whole element label they are rejected. */
@@ -19,6 +20,8 @@ function labels(p: Panel): string[] {
       return [...p.components.map((c) => c.label), ...p.edges.map((e) => e.label)];
     case "journey":
       return p.steps.flatMap((s) => [s.label, s.el.text]);
+    default:
+      return cardLabels(p);
   }
 }
 
@@ -97,6 +100,8 @@ function panelProblem(p: Panel, i: number): string | null {
       if (p.steps.length < 3) return `${n} needs at least three user steps, each with the real thing the user sees`;
       if (p.steps.every((s) => s.el.kind === "text")) return `${n} steps are only text; give each step a button, bar, link, bubble, wave or controls`;
       return null;
+    default:
+      return null;
   }
 }
 
@@ -105,6 +110,15 @@ function panelProblem(p: Panel, i: number): string | null {
  * Returns feedback for the model, or null when the spec passes.
  */
 export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY): string | null {
+  if (isCardPanel(spec.panels[0])) {
+    // Reference style: cards, a range axis or layers. No density measure; the rules are about content, not area.
+    const p = spec.panels[0]!;
+    const empty = cardLabels(p).find((l) => EMPTY_LABELS.test(l.trim()));
+    if (empty) return `"${empty}" is a bare status label; show the actual values instead of labeling them`;
+    const fake = cardLabels(p).find((l) => PLACEHOLDER.test(l));
+    if (fake) return `"${fake}" describes a picture instead of being one; use the real component names and values`;
+    return cardsGate(spec);
+  }
   const beforeAfter = spec.type === "ui_before_after" || spec.type === "bug_before_after";
   if (beforeAfter && spec.panels.length < 2) return "a before/after type needs exactly two panels, before then after";
   if (spec.type === "timeline" && spec.panels.length < 2 && spec.panels[0]?.kind === "timeline" && spec.panels[0].lanes.length < 2) {
@@ -119,7 +133,9 @@ export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY)
     if (fake) return `"${fake}" describes a picture instead of being one; draw the real interface, values or timeline`;
   }
   // Code-level diagrams show what the agent did, not what the user now sees.
-  if (spec.type === "sequence" || spec.type === "architecture") return `a ${spec.type} diagram shows how the code works, not what changed for the person; draw what they see instead (a ui_before_after or bug_before_after mockup with the changed element outlined, or a before/after timeline with bars), or return no_image`;
+  if (spec.type === "sequence") return "a sequence diagram shows how the code works, not what changed for the person; draw what they see instead (a log_compare, state_key or range_chart), or return no_image";
+  if (spec.type === "architecture") return "an architecture drawn as boxes and lines shows how the code works, not what changed; it is allowed only as layers (name, detail, icon, link, items): real component names, an icon on each, one flow direction, or return no_image";
+  if (spec.type === "log_compare" || spec.type === "state_key" || spec.type === "range_chart") return `${spec.type} needs its own panel shape (cards, rows)`;
   const d = visualDensity(spec);
   if (d < minDensity) return `the picture is mostly text (visual density ${(Math.floor(d * 1000) / 1000).toFixed(3)}, needs ${minDensity.toFixed(3)}); draw more mockup elements, arrows, highlights or timeline bars and fewer sentences, or return no_image`;
   return null;

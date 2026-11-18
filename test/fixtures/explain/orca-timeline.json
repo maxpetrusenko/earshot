@@ -1,0 +1,6 @@
+{
+  "name": "orca-timeline",
+  "out": "explain-orca-timeline",
+  "expect": "visual",
+  "reply": "Player timeline colours: 'rest of Original' is grey, the same as 'waits for edited', so playing looks like waiting. Playing should be green."
+}

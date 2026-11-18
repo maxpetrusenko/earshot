@@ -4,9 +4,14 @@
  * the renderer then escapes every value again on output.
  */
 
+import { cardsPanel, layersPanel, rangePanel, type CardsPanel, type LayersPanel, type RangePanel } from "./explain-cards-schema.js";
+import { arr, cleanText, num, oneOf, rec } from "./explain-util.js";
+
+export { cleanText };
+
 export class ExplainError extends Error {}
 
-export const EXPLAIN_TYPES = ["ui_before_after", "bug_before_after", "architecture", "timeline", "sequence", "journey"] as const;
+export const EXPLAIN_TYPES = ["ui_before_after", "bug_before_after", "architecture", "timeline", "sequence", "journey", "log_compare", "state_key", "range_chart"] as const;
 export type ExplainType = (typeof EXPLAIN_TYPES)[number];
 
 export type ElKind = "bar" | "controls" | "button" | "link" | "text" | "bubble" | "wave" | "row";
@@ -77,7 +82,10 @@ export interface ArchPanel {
   edges: { from: string; to: string; label: string }[];
   caption: string;
 }
-export type Panel = UiPanel | TimelinePanel | SequencePanel | ArchPanel | JourneyPanel;
+export type Panel = UiPanel | TimelinePanel | SequencePanel | ArchPanel | JourneyPanel | CardsPanel | RangePanel | LayersPanel;
+
+/** Types drawn in the reference style: eyebrow, headline, subhead, cards, footer. */
+export const CARD_TYPES: readonly ExplainType[] = ["log_compare", "state_key", "range_chart"];
 
 export interface Metric {
   label: string;
@@ -96,32 +104,15 @@ export interface ExplainSpec {
   callouts: string[];
   metrics: Metric[];
   assumptions: string[];
+  /** PROJECT / KIND, the small line above the headline. Reference-style types only. */
+  eyebrow: string;
+  /** One line stating the scope or limit. */
+  footer: string;
+  /** The values are illustrative, not measured; the eyebrow must say so. */
+  illustrative: boolean;
 }
 
 export const MAX = { panels: 2, elements: 8, lanes: 4, segments: 6, actors: 5, messages: 8, components: 7, edges: 9, callouts: 3, metrics: 3, assumptions: 4, steps: 5, visuals: 3 };
-
-const EMOJI = /[\p{Extended_Pictographic}\u200d\ufe0f]/gu;
-
-/** Plain, single-line, length-capped text. Controls, emoji and long dashes are removed. */
-export function cleanText(v: unknown, max: number): string {
-  if (typeof v !== "string" && typeof v !== "number") return "";
-  return String(v)
-    .replace(EMOJI, "")
-    .replace(/[\u2013\u2014]/g, ", ")
-    .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, max)
-    .trim();
-}
-
-const rec = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
-const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-const num = (v: unknown, lo: number, hi: number, dflt: number): number => {
-  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
-  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : dflt;
-};
-const oneOf = <T extends string>(v: unknown, set: readonly T[], dflt: T): T => (typeof v === "string" && (set as readonly string[]).includes(v.toLowerCase()) ? (v.toLowerCase() as T) : dflt);
 
 function uiPanel(p: Record<string, unknown>): UiPanel {
   const elements: UiEl[] = [];
@@ -214,7 +205,10 @@ const BUILD: Record<ExplainType, (p: Record<string, unknown>) => Panel> = {
   bug_before_after: uiPanel,
   timeline: timelinePanel,
   sequence: sequencePanel,
-  architecture: archPanel,
+  architecture: (p) => (Array.isArray(p.layers) ? layersPanel(p) : archPanel(p)),
+  log_compare: cardsPanel,
+  state_key: cardsPanel,
+  range_chart: rangePanel,
   journey: journeyPanel,
 };
 
@@ -232,7 +226,8 @@ export function parseExplain(raw: unknown): ExplainSpec | null {
   if (o.no_image === true || (typeof raw === "string" && isNoImage(raw))) return null;
   const type = typeof o.type === "string" ? (o.type.toLowerCase() as ExplainType) : ("" as ExplainType);
   if (!EXPLAIN_TYPES.includes(type)) throw new ExplainError(`"type" must be one of ${EXPLAIN_TYPES.join(", ")}`);
-  const panels = arr(o.panels).slice(0, MAX.panels).map((p) => BUILD[type](rec(p)));
+  const single = CARD_TYPES.includes(type) || arr(rec(arr(o.panels)[0]).layers).length > 0;
+  const panels = arr(o.panels).slice(0, single ? 1 : MAX.panels).map((p) => BUILD[type](rec(p)));
   if (panels.length === 0) throw new ExplainError('"panels" is empty');
   const metrics: Metric[] = [];
   for (const m of arr(o.metrics).slice(0, MAX.metrics)) {
@@ -251,6 +246,9 @@ export function parseExplain(raw: unknown): ExplainSpec | null {
     callouts: arr(o.callouts).slice(0, MAX.callouts).map((c) => cleanText(c, 80)).filter(Boolean),
     metrics,
     assumptions: arr(o.assumptions).slice(0, MAX.assumptions).map((c) => cleanText(c, 120)).filter(Boolean),
+    eyebrow: cleanText(o.eyebrow, 48),
+    footer: cleanText(o.footer, 80),
+    illustrative: o.illustrative === true,
   };
 }
 

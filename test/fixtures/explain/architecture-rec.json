@@ -1,0 +1,6 @@
+{
+  "name": "architecture-rec",
+  "out": "explain-architecture-rec",
+  "expect": "visual",
+  "reply": "Architecture I recommend: independent AI agents (Hermes, Claude, CUA, Google SSO, Narrator) call a native macOS Input Service over CLI, MCP or a local socket. The service is a persistent Swift LaunchAgent, so no Terminal windows open. It splits into three capabilities: Mouse (move, click, drag), Keyboard (type, shortcuts) and Observe (AX tree, screenshot). All three act on the visible macOS desktop, which Max can watch through Screen Sharing / VNC with native pointer events."
+}
