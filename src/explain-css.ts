@@ -15,7 +15,7 @@ const SOFT = "var(--secondary,#f1ebdd)";
 const HL = "#b45309";
 
 export const EXPLAIN_CSS = `*{box-sizing:border-box}
-html{background:radial-gradient(760px 340px at 100% 0,rgba(31,111,92,.10),transparent 65%),radial-gradient(520px 260px at 0 100%,rgba(180,83,9,.07),transparent 70%),linear-gradient(180deg,var(--background,#fbf8f3),#f4efe4);min-height:100%}
+html{background:radial-gradient(760px 340px at 100% 0,rgba(31,111,92,.10),transparent 65%),radial-gradient(520px 260px at 0 100%,rgba(180,83,9,.07),transparent 70%),linear-gradient(180deg,var(--background,#fbf8f3),#f4efe4);}
 body{margin:0;font-family:${SANS};font-size:16px;line-height:1.35;color:${FG}}
 .ex{max-width:1200px;margin:0 auto;padding:14px 12px 16px}
 h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}

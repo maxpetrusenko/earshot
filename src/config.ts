@@ -52,6 +52,8 @@ export interface Config {
   script: { style: ScriptStyle };
   /** Which Stop events become a memo (hook mode). */
   trigger: { min_chars: number; require_tool_use: boolean; opt_in_tag: boolean };
+  /** How long briefs stay in ~/.earshot/briefs: the last `days` days, and at most `max_mb` in total (oldest go first). */
+  retention: { days: number; max_mb: number };
 }
 
 export const DEFAULTS: Config = {
@@ -80,6 +82,7 @@ export const DEFAULTS: Config = {
   privacy: { redact: true, max_input_chars: 40000, evidence_hosts: [] },
   trigger: { min_chars: 80, require_tool_use: false, opt_in_tag: false },
   script: { style: DEFAULT_STYLE },
+  retention: { days: 7, max_mb: 1024 },
 };
 
 export function defaultConfigPath(): string {
@@ -152,7 +155,7 @@ export function parseConfig(text: string): Config {
   }
   if (!isObj(raw)) throw new ConfigError("config: top level must be a mapping");
   for (const k of Object.keys(raw)) {
-    if (!["llm", "tts", "image", "serve", "privacy", "trigger", "script"].includes(k)) {
+    if (!["llm", "tts", "image", "serve", "privacy", "trigger", "script", "retention"].includes(k)) {
       throw new ConfigError(`config: unknown key "${k}"`);
     }
   }
@@ -164,6 +167,7 @@ export function parseConfig(text: string): Config {
   const privacy = section(raw, "privacy", ["redact", "max_input_chars", "evidence_hosts"]);
   const trigger = section(raw, "trigger", ["min_chars", "require_tool_use", "opt_in_tag"]);
   const script = section(raw, "script", ["style"]);
+  const retention = section(raw, "retention", ["days", "max_mb"]);
 
   const cfg: Config = {
     llm: {
@@ -207,6 +211,10 @@ export function parseConfig(text: string): Config {
       opt_in_tag: pick(trigger, "trigger", "opt_in_tag", d.trigger.opt_in_tag, isBool, "true or false"),
     },
     script: { style: pick(script, "script", "style", d.script.style, oneOf("short", "story", "brief"), "short, story or brief") },
+    retention: {
+      days: pick(retention, "retention", "days", d.retention.days, isNum, "a positive number"),
+      max_mb: pick(retention, "retention", "max_mb", d.retention.max_mb, isNum, "a positive number"),
+    },
   };
   applyTtsProfile(cfg, tts.profiles);
   if (cfg.llm.type === "openai-compatible" && !cfg.llm.base_url) {

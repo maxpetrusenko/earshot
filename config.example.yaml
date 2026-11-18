@@ -69,3 +69,8 @@ trigger:                          # which Claude Code Stop events become a memo 
 
 script:
   style: short   # short: a 20 to 40 second summary; story: a longer conversational memo; brief: the terse status-style memo
+
+retention:                        # ~/.earshot/briefs cleanup; `earshot prune` runs it now, `earshot run` once an hour
+  days: 7                         # delete briefs older than this
+  max_mb: 1024                    # then delete the oldest until the folder is under this size
+                                  # a brief under an hour old, served in the last hour or still being made is never deleted
