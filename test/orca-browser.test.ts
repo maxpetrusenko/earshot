@@ -10,8 +10,11 @@ const haveFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
 const tone = (hz: number, seconds: number): Buffer =>
   spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", `sine=frequency=${hz}:duration=${seconds}`, "-ac", "1", "-ar", "24000", "-b:a", "64k", "-f", "mp3", "pipe:1"], { maxBuffer: 1 << 24 }).stdout;
 
-/** Seek position in seconds, read from the progress bar (1000 steps over the track). */
-const pos = (page: Page) => page.evaluate(() => (Number((document.getElementById("sk") as HTMLInputElement).value) / 1000) * 20);
+/** Elapsed seconds, read from the time label. */
+const pos = (page: Page) => page.evaluate(() => {
+  const m = /^(\d+):(\d+) \//.exec(document.getElementById("tm")!.textContent!)!;
+  return Number(m[1]) * 60 + Number(m[2]);
+});
 
 const engines: [string, BrowserType][] = [["webkit", webkit], ["chromium", chromium]];
 
@@ -43,9 +46,9 @@ describe.skipIf(!haveFfmpeg).each(engines)("generated Orca page in headless %s",
       await page.waitForFunction(() => document.getElementById("tm")!.textContent!.endsWith("/ 0:20"), null, { timeout: 15000 });
       expect(await page.textContent("#st")).toBe("");
 
-      await page.click("#be");
-      expect(await page.textContent("#be")).toBe("Pause");
-      expect(await page.getAttribute("#be", "class")).toBe("on");
+      await page.click("#pp");
+      expect(await page.textContent("#pp")).toBe("Pause");
+      expect(await page.getAttribute("#pp", "class")).toBe("on");
       const ctx = () => page.evaluate(() => ({ state: (window as unknown as { __ctx: AudioContext }).__ctx.state, t: (window as unknown as { __ctx: AudioContext }).__ctx.currentTime }));
       await page.waitForFunction(() => (window as unknown as { __ctx: AudioContext }).__ctx.state === "running", null, { timeout: 15000 });
       const c0 = await ctx();
@@ -54,77 +57,50 @@ describe.skipIf(!haveFfmpeg).each(engines)("generated Orca page in headless %s",
       expect((await ctx()).t).toBeGreaterThan(c0.t);
 
       // 1x advance rate
+      await page.waitForTimeout(1100);
       const a0 = await pos(page);
-      await page.waitForTimeout(1000);
-      const rate1 = (await pos(page)) - a0;
-      expect(rate1).toBeGreaterThan(0.6);
-      expect(rate1).toBeLessThan(1.5);
+      await page.waitForTimeout(2000);
+      const rate1 = ((await pos(page)) - a0) / 2;
+      expect(rate1).toBeGreaterThan(0.5);
+      expect(rate1).toBeLessThan(1.6);
 
       // pause holds the position and flips the label
-      await page.click("#be");
-      expect(await page.textContent("#be")).toBe("Play");
-      expect(await page.getAttribute("#be", "class")).toBe("sel");
+      await page.click("#pp");
+      expect(await page.textContent("#pp")).toBe("Play");
+      expect(await page.getAttribute("#pp", "class")).toBe("");
       const held = await pos(page);
-      await page.waitForTimeout(500);
-      expect(Math.abs((await pos(page)) - held)).toBeLessThan(0.1);
+      await page.waitForTimeout(1200);
+      expect(await pos(page)).toBe(held);
 
       // resume continues from the paused offset, not zero
-      await page.click("#be");
+      await page.click("#pp");
       await page.waitForTimeout(300);
-      expect(await pos(page)).toBeGreaterThanOrEqual(held - 0.1);
+      expect(await pos(page)).toBeGreaterThanOrEqual(held);
 
-      // forward and back 10 s
-      const before = await pos(page);
-      await page.click("#fw");
-      expect((await pos(page)) - before).toBeGreaterThan(9);
-      await page.click("#bk");
-      expect(Math.abs((await pos(page)) - before)).toBeLessThan(1.5);
-
-      // seek by the progress bar jumps and keeps playing
-      await page.evaluate(() => {
-        const s = document.getElementById("sk") as HTMLInputElement;
-        s.value = "750";
-        s.dispatchEvent(new Event("input"));
-        s.dispatchEvent(new Event("change"));
-      });
-      await page.waitForTimeout(200);
-      expect(await pos(page)).toBeGreaterThan(14.8);
-      expect(await page.textContent("#be")).toBe("Pause");
-
-      // speed cycles 1x, 1.25x, 1.5x, 2x and changes the advance rate
-      await page.evaluate(() => {
-        const s = document.getElementById("sk") as HTMLInputElement;
-        s.value = "100";
-        s.dispatchEvent(new Event("change"));
-      });
-      const seen: string[] = [];
-      for (let i = 0; i < 3; i++) {
-        await page.click("#sp");
-        seen.push((await page.textContent("#sp"))!);
-      }
-      expect(seen).toEqual(["1.25x", "1.5x", "2x"]);
-      const b0 = await pos(page);
-      await page.waitForTimeout(1000);
-      const rate2 = (await pos(page)) - b0;
-      expect(rate2 / rate1).toBeGreaterThan(1.5);
-      expect(rate2 / rate1).toBeLessThan(2.6);
-      await page.click("#sp");
-      expect(await page.textContent("#sp")).toBe("1x");
+      // the removed controls are not in the page
+      for (const id of ["sk", "bk", "fw", "sp"]) expect(await page.$(`#${id}`)).toBeNull();
 
       // space toggles when a non-button has focus
       await page.evaluate(() => document.body.focus());
       await page.keyboard.press("Space");
-      expect(await page.textContent("#be")).toBe("Play");
+      expect(await page.textContent("#pp")).toBe("Play");
       await page.keyboard.press("Space");
-      expect(await page.textContent("#be")).toBe("Pause");
+      expect(await page.textContent("#pp")).toBe("Pause");
 
-      // Original switches track: the edited button stops being active
+      // the toggle switches track and keeps playing; Listen is selected first
+      expect(await page.getAttribute("#be", "class")).toBe("sel");
       await page.click("#bo");
-      expect(await page.textContent("#bo")).toBe("Pause");
-      expect(await page.textContent("#be")).toBe("Play");
-      expect(await page.getAttribute("#bo", "class")).toBe("on");
+      expect(await page.getAttribute("#bo", "class")).toBe("sel");
+      expect(await page.getAttribute("#be", "class")).toBe("");
+      expect(await page.getAttribute("#bo", "aria-pressed")).toBe("true");
+      expect(await page.textContent("#pp")).toBe("Pause");
+      await page.click("#be");
+      expect(await page.getAttribute("#be", "class")).toBe("sel");
+      // paused: the toggle only selects
+      await page.click("#pp");
       await page.click("#bo");
-      expect(await page.textContent("#bo")).toBe("Original");
+      expect(await page.textContent("#pp")).toBe("Play");
+      expect(await page.getAttribute("#bo", "class")).toBe("sel");
       expect(errors).toEqual([]);
     } finally {
       await browser.close();
@@ -155,7 +131,7 @@ describe.skipIf(!haveFfmpeg)("player page device handling in headless WebKit", (
     try {
       expect(await r.page.evaluate(() => document.documentElement.className)).not.toBe("ios");
       await r.page.waitForFunction(() => document.getElementById("tm")!.textContent!.endsWith("/ 0:05"), null, { timeout: 15000 });
-      expect(await r.page.isVisible("#be")).toBe(true);
+      expect(await r.page.isVisible("#pp")).toBe(true);
       expect(await height(r.page)).toBeGreaterThan(40);
     } finally {
       await r.browser.close();
@@ -169,7 +145,7 @@ describe.skipIf(!haveFfmpeg)("player page device handling in headless WebKit", (
     try {
       expect(await r.page.evaluate(() => navigator.userAgent)).toMatch(/iPhone/);
       expect(await r.page.evaluate(() => document.documentElement.className)).toBe("ios");
-      expect(await r.page.isVisible("#be")).toBe(false);
+      expect(await r.page.isVisible("#pp")).toBe(false);
       expect(await height(r.page)).toBe(0);
       expect(await r.page.evaluate(() => document.getElementById("tm")!.textContent)).toBe("0:00 / 0:00"); // audio never decoded
     } finally {
