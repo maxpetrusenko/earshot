@@ -107,7 +107,8 @@ export function createBrief(meta: Meta, input: string): string {
 export function writeBrief(meta: Meta, script: string | null): void {
   const dir = briefDir(meta.id);
   if (script !== null) atomicWrite(join(dir, "script.md"), `${meta.title}\n\n${script}\n`);
-  atomicWrite(join(dir, "card.html"), renderCard(meta, script));
+  const explainPages = ["explain.html", "explain2.html", "explain3.html"].filter((f) => existsSync(join(dir, f))).length;
+  atomicWrite(join(dir, "card.html"), renderCard(meta, script, explainPages));
   atomicWrite(join(dir, "meta.json"), `${JSON.stringify(meta, null, 2)}\n`);
 }
 

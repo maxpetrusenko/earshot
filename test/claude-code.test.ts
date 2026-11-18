@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { briefDir, failPending, readMeta, withBriefLock } from "../src/bundle.js";
 import { parseConfig } from "../src/config.js";
-import { applyTag, extractLastMessage, findTranscript, lastTurn, readTail } from "../src/extract/claude-code.js";
+import { applyTag, extractLastMessage, findTranscript, lastTurn, normalizeSession, readTail } from "../src/extract/claude-code.js";
 import { decide } from "../src/hook/claude-code.js";
 import { HOOK_TOKEN, install, installHook, installSkill, uninstall, uninstallHook, uninstallSkill } from "../src/install/claude-code.js";
 import { startFakeProvider } from "./helpers.js";
@@ -369,5 +369,15 @@ describe("review 2 regressions", () => {
         }
       });
     });
+  });
+});
+
+describe("normalizeSession", () => {
+  it("treats an empty or unexpanded ${CLAUDE_SESSION_ID} as no session", () => {
+    for (const v of [undefined, "", "  ", "${CLAUDE_SESSION_ID}", "$CLAUDE_SESSION_ID"]) expect(normalizeSession(v)).toBeUndefined();
+  });
+  it("keeps a real id, and leaves a malformed one for the safety check to reject", () => {
+    expect(normalizeSession("abc-123_X")).toBe("abc-123_X");
+    expect(normalizeSession("../x")).toBe("../x");
   });
 });

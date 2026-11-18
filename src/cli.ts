@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { Command } from "commander";
 import { cachedBaseUrl } from "./baseurl.js";
 import { ConfigError, defaultConfigPath, loadConfig } from "./config.js";
 import { startDetached } from "./detach.js";
 import { briefLinks, listenLines, listenMarkdown } from "./links.js";
 import { prepareBrief } from "./prepare.js";
-import { extractLastMessage, findTranscript, isSafeSessionId } from "./extract/claude-code.js";
+import { extractLastMessage, findTranscript, isSafeSessionId, normalizeSession } from "./extract/claude-code.js";
 import { extractCodexLast, findCodexSession, isSafeCodexId } from "./extract/codex.js";
 import { extractStdin, normalizeInput } from "./extract/stdin.js";
 import { extractTagged } from "./extract/tagged.js";
@@ -20,9 +20,8 @@ import { ForeignNotifyError, installCodex, uninstallCodex } from "./install/code
 import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install/mcp.js";
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
-import { fitOrcaPage, orcaDir, orcaLine, pageTitle, writeOrcaPage } from "./orca.js";
-import { explainPng } from "./explain-png.js";
-import { readFileInBundle, readMeta } from "./bundle.js";
+import { orcaDir } from "./orca.js";
+import { EXPLAIN_MIN_CHARS, finishExplain, finishPlayer, orcaLines, orcaOutput, type OrcaJob } from "./orca-output.js";
 import { flushTracing } from "./lib/llm-tracing.js";
 import { dryRun, executeBrief, loadPrepared, NothingUsableError } from "./run.js";
 import { startServe } from "./serve-cmd.js";
@@ -91,6 +90,10 @@ class UsageError extends Error {}
 
 async function runCommand(flags: RunFlags): Promise<number> {
   const runStart = performance.now();
+  if (flags.session !== normalizeSession(flags.session)) {
+    log("ignoring an empty or unexpanded --session value");
+    flags.session = normalizeSession(flags.session);
+  }
   if (flags.session !== undefined && !(flags.from === "codex" ? isSafeCodexId(flags.session) : isSafeSessionId(flags.session))) {
     err("earshot: --session may contain only letters, digits, - and _ (max 80 characters)");
     return 2;
@@ -103,16 +106,27 @@ async function runCommand(flags: RunFlags): Promise<number> {
   }
   if (flags.session) touchLock(flags.session);
   if (flags.format !== undefined && flags.format !== "text" && flags.format !== "plain" && flags.format !== "json" && flags.format !== "orca" && flags.format !== "auto") throw new UsageError(`--format must be text, plain, json, orca or auto, got "${flags.format}"`);
-  // auto: the Orca player plus the links when the Orca scratch dir is writable, else the links at once with a background memo.
+  // auto: inside Orca (scratch dir writable) the memo is made by a background worker while the player lines print at once;
+  // elsewhere the links print at once with a background memo. orca: the blocking form, waits for the finished audio.
   const auto = flags.format === "auto";
-  const orca = flags.format === "orca" || (auto && orcaDir(flags.orcaDir) !== null);
-  if (auto && !orca) flags.detach = true;
-  if (flags.format === "orca" && flags.detach) throw new UsageError("--format orca waits for the finished audio, so it cannot be combined with --detach");
+  const scratch = orcaDir(flags.orcaDir);
+  const inline = auto && scratch !== null && flags.audio && !flags.dryRun;
+  const orca = flags.format === "orca";
+  if (auto && !inline) flags.detach = true;
+  if (orca && flags.detach) throw new UsageError("--format orca waits for the finished audio, so it cannot be combined with --detach");
   const asJson = flags.json || flags.format === "json";
   const out = (base: string, id: string) => {
     const l = briefLinks(base, id);
     process.stdout.write(asJson ? `${JSON.stringify({ listen: l.listen, listen_original: l.listen_original, card: l.card, id: l.id })}\n` : `${flags.format === "plain" ? listenLines(l) : listenMarkdown(l)}\n`);
   };
+  if (inline) {
+    // The explain page is still made (card page, optional PNG) when the reply is long enough; it is never printed as a chat line.
+    const withExplain = flags.sketch && flags.explain && cfg.image.type !== "none" && input.text.length >= EXPLAIN_MIN_CHARS;
+    const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, orca: { dir: scratch!, explain: withExplain, png: flags.explainPng === true }, log });
+    log(`worker pid ${job.pid}, log ${job.log}`);
+    process.stdout.write(`${orcaLines(job.prepared.meta.id, await cachedBaseUrl(cfg.serve))}\n`);
+    return 0;
+  }
   if (flags.detach) {
     const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, log });
     log(`worker pid ${job.pid}, log ${job.log}`);
@@ -129,7 +143,7 @@ async function runCommand(flags: RunFlags): Promise<number> {
   const prep = prepareBrief(cfg, input.text, { from: input.from, session: flags.session, log });
   const base = await cachedBaseUrl(cfg.serve);
   // The links go out before any work: the server streams each track while it is still being made.
-  // Orca mode prints one line after the audio is complete instead.
+  // --format orca prints its lines after the audio is complete instead.
   if (!orca) out(base, prep.meta.id);
   let result;
   try {
@@ -147,51 +161,11 @@ async function runCommand(flags: RunFlags): Promise<number> {
   log(`${meta.status} in ${meta.total_ms}ms (${timings}); bundle ${dir}`);
   log(`time to first audio: ${first}`);
   if (orca) {
-    const line = await orcaOutput(flags.orcaDir, meta.id, base, runStart, flags.explainPng === true);
+    const line = await orcaOutput(flags.orcaDir, meta.id, base, runStart, flags.explainPng === true, log);
     process.stdout.write(`${line}\n`);
   }
   await healthCheck(base);
   return 0;
-}
-
-/** Orca mode: the inline player line, then the markdown links for the phone. Links only when a page cannot be made. */
-async function orcaOutput(orcaFlag: string | undefined, id: string, base: string, runStart: number, png: boolean): Promise<string> {
-  const links = briefLinks(base, id);
-  const fallback = (why: string) => {
-    log(`orca: ${why}; printing the markdown Listen line`);
-    return listenMarkdown(links);
-  };
-  const dir = orcaDir(orcaFlag);
-  if (!dir) return fallback("ORCA_CHAT_SCRATCH_DIR is unset or not a writable directory");
-  const meta = readMeta(id);
-  const edited = meta?.tracks?.edited.status === "ready" ? readFileInBundle(id, "edited.mp3") : null;
-  if (!edited) return fallback("the edited track is not ready");
-  const original = meta?.tracks?.original.status === "ready" ? readFileInBundle(id, "original.mp3") : null;
-  try {
-    const t = performance.now();
-    const explainPages = (["explain", "explain2", "explain3"] as const).flatMap((k) => {
-      const h = readFileInBundle(id, k === "explain" ? "explain.html" : `${k}.html`)?.toString("utf8");
-      return h ? [{ kind: k, html: h }] : [];
-    });
-    const fit = await fitOrcaPage(edited, original, { editedSeconds: meta?.tracks?.edited.duration_s ?? undefined, originalSeconds: meta?.tracks?.original.duration_s ?? undefined });
-    log(`orca encode ${Math.round(performance.now() - t)}ms`);
-    const file = writeOrcaPage(dir, id, fit.html, "player");
-    // Each explain page is its own display-only visual with its own headline; only a change worth a picture has any.
-    const explains = explainPages.map((p) => ({ file: writeOrcaPage(dir, id, p.html, p.kind), html: p.html, title: pageTitle(p.html) ?? "Explain" }));
-    log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}; explain ${explains.map((x) => x.file).join(", ") || "none"}; ${Math.round(performance.now() - runStart)}ms from start to line`);
-    if (png) {
-      for (const x of explains) {
-        try {
-          log(`explain png ${await explainPng(x.html, join(dir, x.file.replace(/\.html$/, ".png")))}`);
-        } catch (e) {
-          log(`explain png failed: ${e instanceof Error ? e.message : String(e)}`);
-        }
-      }
-    }
-    return [orcaLine(file), ...explains.map((x) => orcaLine(x.file, x.title)), listenMarkdown(links)].join("\n");
-  } catch (e) {
-    return fallback(e instanceof Error ? e.message : String(e));
-  }
 }
 
 const program = new Command();
@@ -229,7 +203,7 @@ program
   .option("--explain-png", "also render the explanation as a 1080x1350 PNG next to the page (needs playwright and a Chromium)")
   .option("--no-audio", "skip the audio")
   .option("--json", "same as --format json")
-  .option("--format <format>", "text (one markdown line: [Listen](...) · [Original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) orca (wait for the audio, write an inline player page for Orca chat, print the ::orca-visual line, then the links) or auto (orca when ORCA_CHAT_SCRATCH_DIR is writable, else links at once)")
+  .option("--format <format>", "text (one markdown line: [Listen](...) · [Original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) orca (wait for the audio, write an inline player page for Orca chat, print the ::orca-visual line, then the links) or auto (never waits: in Orca, stand-in player pages and the ::orca-visual lines at once and the worker fills them in; elsewhere the links at once)")
   .option("--orca-dir <path>", "where --format orca writes the page (default $ORCA_CHAT_SCRATCH_DIR)")
   .option("--dry-run", "scrub and ear-script only; print the script")
   .option("--config <path>", "alternate config file")
@@ -257,8 +231,11 @@ program
   .command("worker <id>", { hidden: true })
   .description("finish a pending brief (started by --detach and the Stop hook)")
   .option("--title <text>", "title override (from the MCP narrate tool)")
+  .option("--orca-dir <path>", "write the Orca player page (and explain page) here when the audio is ready")
+  .option("--orca-explain", "also make the explain pages (they go on the card page)")
+  .option("--explain-png", "with --orca-explain: also render the PNG")
   .option("--config <path>", "alternate config file")
-  .action(async (id: string, o: { config?: string; title?: string }) => {
+  .action(async (id: string, o: { config?: string; title?: string; orcaDir?: string; orcaExplain?: boolean; explainPng?: boolean }) => {
     const cfg = loadConfig(o.config);
     const prep = loadPrepared(id);
     if (!prep) {
@@ -266,13 +243,25 @@ program
       process.exitCode = 2;
       return;
     }
+    const orca: OrcaJob | null = o.orcaDir ? { dir: o.orcaDir, png: o.explainPng === true } : null;
+    let playerDone = false;
     try {
-      const r = await executeBrief(cfg, createLlm(cfg.llm), prep, { from: prep.meta.source.from, title: o.title, log });
+      const r = await executeBrief(cfg, createLlm(cfg.llm), prep, {
+        from: prep.meta.source.from,
+        title: o.title,
+        log,
+        ...(orca ? { explain: o.orcaExplain === true, waitForAudio: true } : {}),
+        onAudioReady: orca ? (async () => { playerDone = true; await finishPlayer(orca.dir, id, log); }) : undefined,
+        onExplain: orca ? (async (htmls) => { await finishExplain(orca, id, htmls, log); }) : undefined,
+      });
       log(`${r.meta.status} in ${r.meta.total_ms}ms`);
     } catch (e) {
       if (!(e instanceof NothingUsableError)) throw e;
       err(`earshot: nothing usable was produced: ${e.message}`);
       process.exitCode = 2;
+    } finally {
+      // A placeholder must never be left asking for a file that will not come.
+      if (orca && !playerDone) await finishPlayer(orca.dir, id, log);
     }
   });
 

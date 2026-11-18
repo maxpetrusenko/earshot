@@ -17,10 +17,15 @@ export const SERVED_FILES: Record<string, string> = {
   "sketch.svg": "image/svg+xml",
   "sketch.png": "image/png",
   "meta.json": "application/json; charset=utf-8",
+  "explain.html": "text/html; charset=utf-8",
+  "explain2.html": "text/html; charset=utf-8",
+  "explain3.html": "text/html; charset=utf-8",
 };
 
 const CARD_CSP =
   "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+/** The explain pages carry inline CSS and inline SVG only: no script, no network, sandboxed. */
+const EXPLAIN_CSP = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox";
 const SVG_CSP = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; sandbox";
 
 interface Asset {
@@ -224,5 +229,5 @@ async function handle(req: IncomingMessage, res: ServerResponse, assets: Map<str
     if (file === "edited.mp3" && meta!.tracks === undefined) file = "memo.mp3"; // old-format brief
   }
   // `file` is now one of the allowlisted constants, so the join cannot leave the brief directory.
-  return serveFile(req, res, join(briefDir(id), file), type, file.endsWith(".svg") ? SVG_CSP : undefined);
+  return serveFile(req, res, join(briefDir(id), file), type, file.endsWith(".svg") ? SVG_CSP : file.endsWith(".html") ? EXPLAIN_CSP : undefined);
 }

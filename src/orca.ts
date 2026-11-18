@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { accessSync, constants, statSync, writeFileSync } from "node:fs";
+import { accessSync, constants, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /** Orca reads the page from $ORCA_CHAT_SCRATCH_DIR; the file must stay under 512 KB, we aim lower. */
@@ -171,9 +171,12 @@ export const orcaLine = (file: string, title = "Listen"): string => `::orca-visu
 const ORCA_LINE = /^::orca-visual\{file="earshot-[A-Za-z0-9]+(?:-player|-explain[23]?|-flow)?\.html"/m;
 export const hasOrcaLine = (text: string): boolean => ORCA_LINE.test(text);
 
+/** Written to a temp name and renamed, so Orca never reads half a page while the worker rewrites it. */
 export function writeOrcaPage(dir: string, id: string, html: string, kind: OrcaKind = "player"): string {
   const file = orcaFileName(id, kind);
-  writeFileSync(join(dir, file), html, { mode: 0o600 });
+  const tmp = join(dir, `.${file}.tmp`);
+  writeFileSync(tmp, html, { mode: 0o600 });
+  renameSync(tmp, join(dir, file));
   return file;
 }
 
@@ -190,4 +193,26 @@ export function pageTitle(html: string): string | null {
     .replace(/\s+/g, " ")
     .trim();
   return text || null;
+}
+
+/** A pending page keeps asking for itself for this long, then gives up (the worker died or Orca does not re-read files). */
+export const PENDING_RELOAD_MS = 120_000;
+
+/**
+ * The page that stands in until the audio is ready: the worker rewrites the same file when it is. Orca pages have no
+ * network, so the page cannot fetch anything; it only reloads itself while the file may still change.
+ * The explain placeholder is collapsed to nothing, like the player on iOS, so an unused one shows no empty frame.
+ */
+export function renderPendingHtml(kind: OrcaKind, o: { note?: string; reload?: boolean; madeAt?: number } = {}): string {
+  const madeAt = o.madeAt ?? Date.now();
+  const reload = o.reload !== false ? `<script>(function(){if(Date.now()-${madeAt}<${PENDING_RELOAD_MS})setTimeout(function(){location.reload()},1500)})();</script>` : "";
+  if (kind === "explain") return `<!doctype html><html><head><meta charset="utf-8"><style>html,body{display:none;height:0;margin:0;padding:0;overflow:hidden}</style></head><body>${reload}</body></html>\n`;
+  const note = o.note ?? "Preparing audio. The Listen link works now.";
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script>${IOS_DETECT}</script>
+<style>
+${PAGE_CSS}
+#st{color:var(--muted-foreground,#666);display:block}
+</style></head><body><div class="bar"><div id="st">${escapeHtml(note)}</div></div>${reload}</body></html>
+`;
 }

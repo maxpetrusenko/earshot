@@ -49,7 +49,11 @@ Orca's content security policy blocks `data:` URLs for media, so `<audio src="da
 echo "<agent reply>" | earshot run --format auto
 ```
 
-`--format auto` picks the Orca output when `ORCA_CHAT_SCRATCH_DIR` is set and writable, and otherwise prints the links at once and finishes the memo in the background. `--format orca` forces the Orca output and falls back to the markdown line when the page cannot be made. `--orca-dir <path>` overrides the scratch directory. Orca output waits for the finished audio, so it cannot be combined with `--detach`.
+`--format auto` never blocks. Inside Orca (scratch dir set and writable) it writes stand-in pages, prints the `::orca-visual` lines and the links in about half a second, and a detached worker makes the audio; when the audio is ready the worker rewrites the same player file (write to a temp name, then rename) with the real player. Outside Orca it prints the links at once and finishes the memo in the background. The Explain line is never printed in this mode: the explain stage needs 5 to 10 s and may answer no image, and a line that can end up an empty card is worse than none. For a reply of 500 characters or more the worker still runs the stage and saves the pages (`explain.html`, `explain2.html`, `explain3.html`) in the brief; the card page (`/b/<id>`, the phone link page) shows a "What changed" section with a link to each, and shows nothing when the model drew no image. `--format orca` blocks and prints a line, titled with the page's headline, for each page that exists.
+
+`--format orca` is the blocking form: it waits for the finished audio, writes the real pages and falls back to the markdown line when a page cannot be made, so it cannot be combined with `--detach`. Use it if your Orca does not re-read a page file that changes after the reply was rendered. `--orca-dir <path>` overrides the scratch directory.
+
+The stand-in player says "Preparing audio. The Listen link works now." and reloads itself every 1.5 s for up to two minutes. If the worker fails it is replaced by a final note without the reload. Whether Orca re-reads a file that changes after the reply was rendered is not verified; the Listen and Original links always work and stream while the audio is made, so playback is never blocked on it.
 
 The Stop hook treats either line as already narrated.
 
@@ -59,7 +63,19 @@ The player page embeds both tracks, re-encoded with ffmpeg to mono, 22.05 kHz MP
 
 ## Speed
 
-Inline mode waits for the whole audio, so the time to the line is the time to finish both tracks. Kokoro-FastAPI handles one request at a time, so two tracks on one server take the sum of their audio. When the caller waits for the audio, earshot sends the first chunk of a track alone, so its first audio is not queued behind the other chunks on a Kokoro that serves one request at a time, then sends the rest at once and writes them in order, and `tts.original_base_url` can point the original track at a second Kokoro instance so the tracks stop competing:
+Measured through the skill's command (`earshot run --format auto`, short style, Claude script, Kokoro on a Mac mini with a second instance for the original), 0.7 KB reply, 2026-11-18:
+
+| | Before (blocking) | After |
+|---|---|---|
+| Command returns, in Orca | 6.8 s (about 19 s on longer replies) | 0.4 s |
+| Command returns, outside Orca | 0.35 s | 0.38 s |
+| First Original audio (link) | 0.4 s | 0.4 to 0.8 s |
+| First Listen audio (link) | 2.7 s | 2.7 to 3.5 s |
+| Real player page written | at return | 6.5 to 7.2 s |
+
+Stages of that run, in parallel: script (Claude, streamed) 3.2 to 3.9 s, edited speech finishing 2.7 s after the script starts, original speech 5.0 s (3 chunks, 37 s of audio), explain call 5.3 s, page encode 0.27 s. The critical path to the real player is the slower of original speech and the explain call, plus the encode; the links do not wait for either.
+
+The first chunk of a track goes to the TTS server alone, so its first audio is not queued behind the other chunks on a Kokoro that serves one request at a time; the rest are sent at once and written in order. `tts.original_base_url` can point the original track at a second Kokoro instance so the tracks stop competing:
 
 ```bash
 # on the TTS host: a second instance on another port
@@ -70,15 +86,6 @@ uvicorn api.src.main:app --host <addr> --port 8883
 tts:
   original_base_url: http://<addr>:8883/v1
 ```
-
-Measured through the skill's command (`earshot run --format auto`, short style, Claude script, Kokoro on a Mac mini with a second instance for the original), on a 0.4 KB reply, two runs:
-
-| Run | Time from reply in to both lines out |
-|---|---|
-| 1 | 7.0 s |
-| 2 | 11.1 s |
-
-Run 2 broke down as script 9.5 s (the LLM, which varies), original speech 4.5 s in parallel, edited speech finishing 1.2 s after the script, page encode 0.15 s. The page was 212 KB.
 
 ## Limits
 

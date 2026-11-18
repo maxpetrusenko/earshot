@@ -212,7 +212,7 @@ describe("serving a growing track", () => {
   afterAll(() => site.close());
 
   it("allows exactly the listed files", () => {
-    expect(Object.keys(SERVED_FILES).sort()).toEqual(["edited.mp3", "memo.mp3", "meta.json", "original.mp3", "sketch.png", "sketch.svg"]);
+    expect(Object.keys(SERVED_FILES).sort()).toEqual(["edited.mp3", "explain.html", "explain2.html", "explain3.html", "memo.mp3", "meta.json", "original.mp3", "sketch.png", "sketch.svg"]);
   });
 
   it("answers 404 for chunk files, the old name, other cases and near misses", async () => {
