@@ -62,6 +62,20 @@ describe("earshot run --visual", () => {
     expect(readFileSync(r.explainFile, "utf8")).not.toContain("intent:");
   }, 60000);
 
+  it("three visuals: still one Explain line, and that page stacks all three, never an empty card", async () => {
+    const two = { ...EXPLAIN_SPEC, title: "Second visual headline" };
+    const three = { ...EXPLAIN_SPEC, title: "Third visual headline" };
+    const r = await run(["--visual"], { explain: { visuals: [EXPLAIN_SPEC, two, three] }, port: 17797 });
+    expect(r.lines).toHaveLength(3);
+    expect(r.lines.filter((l) => l.includes("-explain"))).toHaveLength(1);
+    expect(await until(() => readFileSync(r.explainFile, "utf8").includes("Third visual headline"))).toBe(true);
+    const page = readFileSync(r.explainFile, "utf8");
+    for (const t of ["Retries now stop at five", "Second visual headline", "Third visual headline"]) expect(page).toContain(t);
+    expect(page).not.toContain("Drawing the picture.");
+    expect(readdirSync(r.scratch).filter((f) => f.includes("-explain")).sort()).toEqual([`earshot-${r.id}-explain.html`]);
+    expect(existsSync(join(r.bundle, "explain3.html"))).toBe(true); // the card page still has each visual on its own
+  }, 60000);
+
   it("writes the fallback card when the model says NO_IMAGE: never an empty page", async () => {
     const r = await run(["--visual"], { port: 17792 });
     expect(r.lines).toHaveLength(3);

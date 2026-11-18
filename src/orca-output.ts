@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { briefLinks, listenMarkdown } from "./links.js";
 import { readFileInBundle, readMeta } from "./bundle.js";
 import { explainPng } from "./explain-png.js";
+import { stackPages } from "./explain-stack.js";
 import { fitOrcaPage, orcaDir, orcaLine, pageTitle, renderPendingHtml, writeOrcaPage, type Fitted, type OrcaKind } from "./orca.js";
 
 /** Explainer v2 makes up to three pages per reply; each has its own file. */
@@ -25,7 +26,9 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
  * there is never an Explain line: whether the model draws an image is only known seconds later, and a line that can
  * end up an empty card is worse than no line; the image goes on the card page (the link page) instead. With `visual`
  * the caller asked for a picture, so the Explain line comes right after the player and the worker guarantees a page
- * behind it: the model's image, or a deterministic "what changed" card.
+ * behind it: the model's image, or a deterministic "what changed" card. It is always one line: the model decides how
+ * many visuals (one to three) only after the line is printed, so a line per visual would leave empty cards whenever it
+ * draws fewer. Instead that one page stacks every visual the model made.
  */
 export function orcaLines(id: string, base: string, visual = false): string {
   return [orcaLine(`earshot-${id}-player.html`), ...(visual ? [orcaLine(`earshot-${id}-explain.html`, "Explain")] : []), listenMarkdown(briefLinks(base, id))].join("\n");
@@ -68,15 +71,12 @@ export async function finishPlayer(dir: string, id: string, log: (l: string) => 
 
 /** Optional PNGs of the finished explain pages (`--explain-png`), written next to the player in the scratch dir. */
 export async function finishExplain(job: OrcaJob, id: string, htmls: string[], log: (l: string) => void): Promise<void> {
-  if (job.visual) {
-    for (const [i, html] of htmls.entries()) {
-      const kind = EXPLAIN_KINDS[i];
-      if (!kind) break;
-      try {
-        log(`orca page ${writeOrcaPage(job.dir, id, html, kind)}`);
-      } catch (e) {
-        log(`orca explain page failed: ${msg(e)}`);
-      }
+  if (job.visual && htmls.length > 0) {
+    // One line is in the chat and the number of visuals was unknown when it was printed, so that one page shows them all, stacked.
+    try {
+      log(`orca page ${writeOrcaPage(job.dir, id, stackPages(htmls.slice(0, EXPLAIN_KINDS.length)), "explain")} (${Math.min(htmls.length, EXPLAIN_KINDS.length)} visual${htmls.length > 1 ? "s" : ""})`);
+    } catch (e) {
+      log(`orca explain page failed: ${msg(e)}`);
     }
   }
   if (!job.png) return;
