@@ -12,7 +12,7 @@ import { createLlm } from "../src/llm.js";
 import { redact } from "../src/redact.js";
 
 const FIX = join(import.meta.dirname, "..", "test", "fixtures", "explain");
-const OUT = join(homedir(), "earshot-demo");
+const OUT = process.env.EXPLAIN_OUT ?? join(homedir(), "earshot-demo");
 const args = process.argv.slice(2);
 const shots = args.includes("--shots");
 const only = args.filter((a) => !a.startsWith("--"));
@@ -56,7 +56,7 @@ if (shots && pages.length) {
   try {
     for (const p of pages) {
       for (const width of [390, 1280]) {
-        const page = await browser.newPage({ viewport: { width, height: 800 }, deviceScaleFactor: 2 });
+        const page = await browser.newPage({ viewport: { width, height: 200 }, deviceScaleFactor: 2 });
         await page.goto(`file://${p.file}`);
         const path = join(OUT, "shots", `${p.name}-${width}-${p.file.split("/").pop()!.replace(/\.html$/, "")}.png`);
         await page.screenshot({ path, fullPage: true });

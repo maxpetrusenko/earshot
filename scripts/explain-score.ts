@@ -28,7 +28,7 @@ if (images.length === 0) {
   process.exit(2);
 }
 
-/** Six areas of one image, 1 to 10, plus the overall verdict. */
+/** Eight areas of one image, 1 to 10, plus the overall verdict. */
 interface Scores {
   file: string;
   realism: number;
@@ -36,29 +36,33 @@ interface Scores {
   density: number;
   journey: number;
   metrics: number;
+  how: number;
+  clarity: number;
   style: number;
   overall: number;
   notes: string;
 }
 
-const AREAS = ["realism", "legibility", "density", "journey", "metrics", "style"] as const;
+const AREAS = ["realism", "legibility", "density", "journey", "metrics", "how", "clarity", "style"] as const;
 
 const PROMPT = (file: string) => `You are grading one screenshot of a visual explanation, as a hard-to-please design reviewer.
 
 Open the image at ${file} with your Read tool. Judge only what the image shows, not any description.
 
-Score each area from 1 to 10, where 8 means good enough to ship and 10 is exceptional:
+Score each area from 1 to 10, where 8 means good enough to ship and 10 is exceptional. The picture must explain what changed for the user, not diagram what the agent did:
 - realism: does it show the real interface or data (windows, controls, bars, values), never a box labelled "Diagram"?
 - legibility: is what changed outlined or pointed at with an arrow, and obvious in one glance?
 - density: is the space used well at this width, or is it sparse, padded or full of sentences?
 - journey: do the captions tell the reader what they can now do, rather than how the code works?
 - metrics: are before and after numbers shown with an honest measured-versus-target note?
+- how: "Shows how it works": from the picture alone, can a newcomer see what the feature does and what is different now (arrows, colored outlines on what changed, before/after where relevant)?
+- clarity: "Visual clarity": clean hierarchy, nothing overlapping or clipped, labels readable at this size, one concept, at most a few highlighted things.
 - style: light theme, a real typeface (not Inter/Roboto/Arial), no purple-on-white, no badges or chips, readable contrast, nothing clipped.
 
 Then give overall as the honest verdict for shipping this image.
 
 Return only this JSON object, no prose:
-{"realism":0,"legibility":0,"density":0,"journey":0,"metrics":0,"style":0,"overall":0,"notes":"one sentence on the biggest weakness"}`;
+{"realism":0,"legibility":0,"density":0,"journey":0,"metrics":0,"how":0,"clarity":0,"style":0,"overall":0,"notes":"one sentence on the biggest weakness"}`;
 
 function claude(args: string[], prompt: string): Promise<{ code: number; out: string; err: string }> {
   const env = { ...process.env };
@@ -112,7 +116,7 @@ for (const file of images) {
     console.error(`no scores from opus for ${file} (exit ${r.code}): ${(r.out + r.err).trim().slice(0, 200)}`);
     process.exit(1);
   }
-  const row: Scores = { file, realism: n(o.realism), legibility: n(o.legibility), density: n(o.density), journey: n(o.journey), metrics: n(o.metrics), style: n(o.style), overall: n(o.overall), notes: typeof o.notes === "string" ? o.notes : "" };
+  const row: Scores = { file, realism: n(o.realism), legibility: n(o.legibility), density: n(o.density), journey: n(o.journey), metrics: n(o.metrics), how: n(o.how), clarity: n(o.clarity), style: n(o.style), overall: n(o.overall), notes: typeof o.notes === "string" ? o.notes : "" };
   scores.push(row);
   if (!json) process.stderr.write(`  overall ${row.overall}/10  ${row.notes}\n`);
 }
