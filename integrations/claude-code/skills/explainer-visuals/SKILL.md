@@ -7,7 +7,7 @@ description: Make or review a visual explainer image for an agent reply: a befor
 
 One reply in, zero to three phone-sized images out. The picture must make the change visible before anyone reads a word. A picture that reads like a formatted summary has failed, even when every fact in it is right.
 
-Code that does this in earshot: `src/explain-*.ts`, prompt `prompts/visual-explainer.v5.txt` plus `prompts/visual-explainer-format.v5.txt`, scorer `scripts/explain-score.ts`. The rules below and the prompt are one rule set; `test/explain-refs.test.ts` fails if they drift.
+Code that does this in earshot: `src/explain-*.ts`, prompt `prompts/visual-explainer.v6.txt` plus `prompts/visual-explainer-format.v6.txt`, scorer `scripts/explain-score.ts`. The rules below and the prompt are one rule set; `test/explain-refs.test.ts` fails if they drift.
 
 Details live in `references/`:
 - `references/methods.md`: the four methods, how to run each
@@ -32,7 +32,19 @@ Decide first. Most replies get no image.
 
 When unsure, no image. A status-only reply must never get one.
 
-## 2. Pick the method
+## 2. Director pass (required, before any visual)
+
+Write five director lines before the visual JSON or the image. Skip none. The format is the one in the `visual-studio` skill; the explain stage asks the model for the same five as a `director` object on every visual, and the gate rejects a visual whose `director` is missing or has an empty line.
+
+1. **Intent.** What the viewer believes or does afterwards, one sentence. If you cannot write it, there is no image: NO_IMAGE.
+2. **Key frame.** The single frame that carries the intent, described as a picture (the one highlighted thing), not a list of facts.
+3. **First look.** What the eye lands on first, named as an object ("the green 9", "the short green marker"), not a topic.
+4. **Two-second test, planned.** Hide headline, subhead, captions and footer. Say what a viewer can still point at. If the answer is nothing, redraw the composition first.
+5. **Motion verdict.** Motion earns its place only when the mechanism arrives over time. A static comparison stays a still. Default no.
+
+In earshot the lines are logged (`director 1 intent: ...` in the worker log) and saved next to the page as `explain.director.txt` (`explain2.director.txt`, `explain3.director.txt`) in the brief folder. They are never drawn on the page and never served.
+
+## 3. Pick the method
 
 | Method | Use for | Never for |
 | --- | --- | --- |
@@ -43,7 +55,7 @@ When unsure, no image. A status-only reply must never get one.
 
 Raster generation needs a subscription route (for example Codex OAuth image generation). No paid API keys. If no route exists, skip it and say so. See `references/methods.md`.
 
-## 3. Composition rules (these scored; the first draft did not)
+## 4. Composition rules (these scored; the first draft did not)
 
 1. One close-up. One concept per image, at most three images per reply.
 2. Show the state in the same slot. Waiting and playing are the same player bar with different contents, one above the other. The eye compares contents, not frames.
@@ -64,23 +76,27 @@ Text parts: eyebrow `PROJECT / KIND`, a declarative headline under nine words th
 
 When the numbers are the wait until something appears in the player, merge the two: the track is the player bar, dashed while waiting, a waveform once available, and the bracket sits where it becomes available. Merge only when the timing evidence describes that same player behavior. Keep a gate log separate.
 
-## 4. Review gates, in this order
+## 5. Review gates, in this order
 
 1. Two-second test. Render with the headline, subhead, captions and footer hidden. Can someone point at what changed in two seconds? If not, change the composition. Do not touch the prompt first.
 2. Then the Opus rubric: eight areas, every image 8/10 or higher to ship, graded against the reference PNGs. A timeline or state key is graded on whether its states and timing make sense, not on whether it looks like a screenshot.
 
-Run both with `pnpm tsx scripts/explain-score.ts <dir> --min 8`. The demo script writes the bare screenshot next to each image (`*-bare.png`) and the scorer runs the two-second test first, as a hard gate. See `references/review-gates.md`.
+Run both with `pnpm tsx scripts/explain-score.ts <dir> --min 8` (draft: Sonnet, 4 images at a time) and `--final` for the Opus score once the draft rounds pass. The demo script writes the bare screenshot next to each image (`*-bare.png`) and the scorer runs the two-second test first, as a hard gate. See `references/review-gates.md`.
 
-## 5. Run it in earshot
+## 6. Run it in earshot
+
+Draft rounds look at 390 px only and score with Sonnet; render 1280 once and score with Opus at the end.
 
 ```
-pnpm tsx scripts/explain-demo.ts --shots          # live model over test/fixtures/explain/*.json, 390 and 1280 px
-pnpm tsx scripts/explain-preview.ts spec.json out --shots   # a saved spec, no LLM
-pnpm tsx scripts/explain-score.ts <shots dir> --min 8
+pnpm tsx scripts/explain-demo.ts --shots          # macbook-only: live model over test/fixtures/explain/*.json, 390 px
+pnpm tsx scripts/explain-preview.ts spec.json out --shots   # macbook-only: a saved spec, no LLM, 390 px
+pnpm tsx scripts/explain-score.ts <shots dir> --min 8       # Sonnet two-second test and rubric, 4 images in parallel (--jobs N)
+pnpm tsx scripts/explain-demo.ts --shots --final            # macbook-only: 390 and 1280 px, once, at the end
+pnpm tsx scripts/explain-score.ts <shots dir> --final --min 8   # Opus rubric, the score that counts
 ```
 
-Heavy work (renders, Playwright, scoring) runs on maxiclaw (`ssh mini`, `~/Projects/earshot`).
+Heavy work (renders, Playwright, scoring) runs on pro. Check `df -h ~` before any render on maxiclaw; it needs about 2 GB free.
 
-## 6. Types the code accepts
+## 7. Types the code accepts
 
 `log_compare`, `state_key`, `range_chart` (with `player: true` for wait-until-available), `architecture` (layered only, real names, an icon on every node, one flow direction), `ui_before_after`. Code-level sequence diagrams and boxes joined by lines are rejected.

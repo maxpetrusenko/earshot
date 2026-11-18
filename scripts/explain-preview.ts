@@ -6,11 +6,13 @@ import { explainGate, visualDensity } from "../src/explain-gate.js";
 import { renderExplainHtml } from "../src/explain-render.js";
 
 // Render a hand-authored or saved model answer (one visual or {"visuals":[...]}) without an LLM.
-// Usage: pnpm tsx scripts/explain-preview.ts <spec.json> [out.html] [--shots]
+// Usage: pnpm tsx scripts/explain-preview.ts <spec.json> [out.html] [--shots] [--final]   # --shots: 390 px only; --final: 390 and 1280
 const [file, outArg] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const shots = process.argv.includes("--shots");
+// Draft rounds render 390 px only; --final adds 1280 once, at the end.
+const widths = process.argv.includes("--final") ? [390, 1280] : [390];
 if (!file) {
-  console.error("usage: explain-preview <spec.json> [out.html] [--shots]");
+  console.error("usage: explain-preview <spec.json> [out.html] [--shots] [--final]");
   process.exit(2);
 }
 const specs = parseExplainAll(JSON.parse(readFileSync(resolve(file), "utf8")));
@@ -31,7 +33,7 @@ if (shots && pages.length) {
   const browser = await chromium.launch();
   try {
     for (const p of pages) {
-      for (const width of [390, 1280]) {
+      for (const width of widths) {
         const page = await browser.newPage({ viewport: { width, height: 800 }, deviceScaleFactor: 2 });
         await page.goto(pathToFileURL(resolve(p)).href);
         const shot = `${p.replace(/\.html$/, "")}-${width}.png`;

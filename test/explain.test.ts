@@ -4,7 +4,7 @@ import { explainGate, MIN_DENSITY, visualDensity } from "../src/explain-gate.js"
 import { renderExplainHtml } from "../src/explain-render.js";
 import { cleanText, ExplainError, parseExplain, parseExplainAll, type ExplainSpec } from "../src/explain-schema.js";
 import type { LlmProvider } from "../src/llm.js";
-import { EXPLAIN_SPEC } from "./explain-fixtures.js";
+import { DIRECTOR, EXPLAIN_SPEC } from "./explain-fixtures.js";
 
 const INJECT = `<script>alert(1)</script> "q" 'a' & <img onerror=x>`;
 
@@ -12,6 +12,7 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 const spec = (o: unknown = EXPLAIN_SPEC): ExplainSpec => parseExplain(o)!;
 
 const TIMELINE = {
+  director: DIRECTOR,
   type: "timeline",
   title: "Original audio starts sooner",
   takeaway: "You hear the original right away instead of after the edited memo.",
@@ -21,18 +22,21 @@ const TIMELINE = {
   ],
 };
 const SEQUENCE = {
+  director: DIRECTOR,
   type: "sequence",
   title: "Hook to player",
   takeaway: "A reply becomes a played memo.",
   panels: [{ label: "Reply to audio", caption: "Your reply turns into a clip you can play without leaving the chat.", actors: ["Agent", "Hook", "Kokoro"], messages: [{ from: "Agent", to: "Hook", text: "final reply" }, { from: "Hook", to: "Kokoro", text: "script chunks" }, { from: "Kokoro", to: "Hook", text: "mp3", dashed: true }] }],
 };
 const ARCH = {
+  director: DIRECTOR,
   type: "architecture",
   title: "Two paths now",
   takeaway: "Audio and picture are made side by side.",
   panels: [{ label: "After", caption: "The picture and the audio are made side by side, so neither waits.", components: [{ id: "a", label: "Reply" }, { id: "b", label: "Script" }, { id: "c", label: "Explain" }, { id: "d", label: "Orca chat", state: "good" }], edges: [{ from: "a", to: "b", label: "text" }, { from: "a", to: "c", label: "text" }, { from: "b", to: "d", label: "mp3" }, { from: "c", to: "d", label: "html" }] }],
 };
 const JOURNEY = {
+  director: DIRECTOR,
   type: "journey",
   title: "Reply to sound in one tap",
   takeaway: "You can listen without waiting for the whole memo.",
@@ -131,6 +135,7 @@ describe("explainGate", () => {
 describe("visualDensity and multiple visuals", () => {
   it("drops a candidate whose area is mostly sentences", () => {
     const o = {
+      director: DIRECTOR,
       type: "ui_before_after",
       title: "A page of prose",
       takeaway: "This picture is a sentence with a border around it, which is exactly what a picture should not be, because the reader has to read every word of it instead of seeing the change at a glance.",

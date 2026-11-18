@@ -1,6 +1,13 @@
 {
   "visuals": [
     {
+      "director": {
+        "intent": "The viewer believes the invoice page now loads in one query.",
+        "key_frame": "Two invoice lists, one still loading row by row and one complete.",
+        "first_look": "The highlighted customers loaded bar.",
+        "two_second_test": "With the text hidden the viewer can still point at the half-filled bar against the full one.",
+        "motion": "No. A static comparison stays a still."
+      },
       "title": "The invoice page loads in one query",
       "takeaway": "You see the whole list with customer names at once instead of watching rows fill in one by one.",
       "type": "ui_before_after",
@@ -101,6 +108,13 @@
       "assumptions": []
     },
     {
+      "director": {
+        "intent": "The viewer believes 200 customer lookups became one round trip.",
+        "key_frame": "Two timelines, a long staircase of lookups above and one short bar below.",
+        "first_look": "The single short green bar.",
+        "two_second_test": "With the text hidden the viewer can still point at the long staircase against the one short bar.",
+        "motion": "No. Both lanes are known at once, so a still shows them."
+      },
       "title": "Two hundred round trips become one",
       "takeaway": "The database answers once instead of two hundred times, so the page stops waiting in line.",
       "type": "timeline",

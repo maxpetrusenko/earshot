@@ -1,6 +1,6 @@
 # Scores
 
-Opus (`claude -p --model opus`) overall score out of 10 per image at 390 px, after the two-second test. FAIL means the two-second test failed and the image scored 0 without the rubric. Target: every image 8 or higher.
+Opus (`claude -p --model opus`, `explain-score.ts --final`) overall score out of 10 per image at 390 px, after the two-second test. FAIL means the two-second test failed and the image scored 0 without the rubric. Target: every image 8 or higher.
 
 | Image | Round 1 | Round 2 | Round 3 (final) |
 | --- | --- | --- | --- |

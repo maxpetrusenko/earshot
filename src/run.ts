@@ -6,7 +6,8 @@ import { Semaphore, TrackWriter } from "./track.js";
 import type { Config } from "./config.js";
 import { beginRun, endRun } from "./lib/llm-tracing.js";
 import { buildSketch } from "./sketch.js";
-import { buildExplain } from "./explain.js";
+import { buildExplain, directorFileName, directorLines } from "./explain.js";
+import { renderFallbackHtml } from "./explain-fallback.js";
 import type { LlmProvider } from "./llm.js";
 import { redact } from "./redact.js";
 import { prepareBrief, scrub, type Prepared } from "./prepare.js";
@@ -25,6 +26,8 @@ export interface RunOptions {
   noAudio?: boolean;
   /** The caller waits for both finished tracks, so synthesize chunks in parallel and do not hold the original back. */
   waitForAudio?: boolean;
+  /** `--visual`: the explain page must never come out empty. When the model draws nothing (NO_IMAGE, a failed gate, an LLM error) a deterministic "what changed" card from the reply is written in its place. */
+  visual?: boolean;
   /** Called once both audio tracks have settled, before the explain page is awaited: the Orca worker writes the player here. */
   onAudioReady?: () => Promise<void>;
   /** Called when the explain stage ends: its page, or null when there is no image. */
@@ -164,17 +167,30 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
 
     // The explain page: one LLM call from the reply text, started now so it runs alongside the script and the
     // speech. It never holds audio back; a failure is recorded and the memo still ships.
+    const fallbackPage = (why: string): string => {
+      log(`explain: fallback card (${why})`);
+      const html = renderFallbackHtml(clean(text));
+      writeFileInBundle(id, "explain.html", html);
+      return html;
+    };
     const explainJob: Promise<void> =
       opts.explain && !opts.noSketch && cfg.image.type !== "none"
         ? stage(stages, "explain", log, () => buildExplain(llm, clean(text))).then(
             async (r) => {
-              r.visuals.forEach((v, i) => writeFileInBundle(id, i === 0 ? "explain.html" : `explain${i + 1}.html`, v.html));
+              r.visuals.forEach((v, i) => {
+                writeFileInBundle(id, i === 0 ? "explain.html" : `explain${i + 1}.html`, v.html);
+                if (!v.spec.director) return;
+                const lines = directorLines(v.spec.director);
+                lines.forEach((l) => log(`director ${i + 1} ${l}`));
+                writeFileInBundle(id, directorFileName(i), `${lines.join("\n")}\n`);
+              });
               if (r.visuals.length === 0) log(`explain: no image (${r.reason})`);
-              await opts.onExplain?.(r.visuals.map((v) => v.html)).catch((e) => log(`explain hook failed: ${errMsg(e)}`));
+              const htmls = r.visuals.length === 0 && opts.visual ? [fallbackPage(r.reason ?? "no image")] : r.visuals.map((v) => v.html);
+              await opts.onExplain?.(htmls).catch((e) => log(`explain hook failed: ${errMsg(e)}`));
             },
             async (e) => {
               failures.push(`explain: ${errMsg(e)}`);
-              await opts.onExplain?.([]).catch((e) => log(`explain hook failed: ${errMsg(e)}`));
+              await opts.onExplain?.(opts.visual ? [fallbackPage(errMsg(e))] : []).catch((e) => log(`explain hook failed: ${errMsg(e)}`));
             },
           )
         : Promise.resolve();

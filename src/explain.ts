@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { EarScriptError, extractJson } from "./earscript.js";
 import { explainGate } from "./explain-gate.js";
 import { renderExplainHtml } from "./explain-render.js";
-import { ExplainError, isNoImage, parseExplainAll, type ExplainSpec } from "./explain-schema.js";
+import { ExplainError, isNoImage, parseExplainAll, type Director, type ExplainSpec } from "./explain-schema.js";
 import { mergeRangeCharts } from "./explain-merge.js";
 import type { LlmProvider } from "./llm.js";
 import { traceGeneration, traceSpan } from "./lib/llm-tracing.js";
@@ -20,6 +20,14 @@ export interface Explained {
   /** Why there is no page: the model said so, or the last gate feedback. */
   reason: string | null;
 }
+
+/** The five director lines as `name: text` lines, for the log and the file saved next to the page. */
+export function directorLines(d: Director): string[] {
+  return [`intent: ${d.intent}`, `key_frame: ${d.keyFrame}`, `first_look: ${d.firstLook}`, `two_second_test: ${d.twoSecondTest}`, `motion: ${d.motion}`];
+}
+
+/** Bundle name of the director file of the i-th visual, next to explain.html, explain2.html, explain3.html. It is saved, never rendered. */
+export const directorFileName = (i: number): string => `explain${i === 0 ? "" : i + 1}.director.txt`;
 
 const read = (file: string) => readFileSync(new URL(`../prompts/${file}`, import.meta.url), "utf8");
 

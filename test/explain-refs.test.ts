@@ -8,12 +8,14 @@ import { renderExplainHtml } from "../src/explain-render.js";
 import { parseExplain, type ExplainSpec } from "../src/explain-schema.js";
 import type { LlmProvider } from "../src/llm.js";
 import { padDecimals } from "../src/explain-util.js";
+import { DIRECTOR } from "./explain-fixtures.js";
 
 const root = join(import.meta.dirname, "..");
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-const spec = (o: unknown): ExplainSpec => parseExplain(o)!;
+const spec = (o: unknown): ExplainSpec => parseExplain({ director: DIRECTOR, ...(o as object) })!;
 
 const LOG = {
+  director: DIRECTOR,
   eyebrow: "Earshot / Log comparison",
   title: "The gate was right.",
   takeaway: "The log made the rejection look wrong.",
@@ -22,6 +24,7 @@ const LOG = {
   panels: [{ cards: [{ tag: "BEFORE", sub: "REPORTED LOG", tone: "bad", mono: "0.55 needs 0.55", caption: "Same-looking numbers." }, { tag: "AFTER", sub: "EXPECTED DISPLAY", tone: "good", mono: "0.549 needs 0.550", caption: "Visibly below." }] }],
 };
 const STATES = {
+  director: DIRECTOR,
   eyebrow: "Orca player / Timeline states",
   title: "Waiting isn't playing.",
   takeaway: "Two states the player should distinguish.",
@@ -30,6 +33,7 @@ const STATES = {
   panels: [{ cards: [{ tag: "WAITING", title: "waits for edited", mark: "dashed" }, { tag: "PLAYING", title: "rest of Original", tone: "good", mark: "wave" }] }],
 };
 const RANGE = {
+  director: DIRECTOR,
   eyebrow: "Earshot / Illustrative data",
   title: "Original ready in 7 to 11 s.",
   takeaway: "Time until Original can play.",
@@ -38,6 +42,7 @@ const RANGE = {
   panels: [{ unit: "s", player: true, rows: [{ label: "Before", from: 60, to: 60, text: "about 60 s" }, { label: "After", from: 7, to: 11, tone: "good" }] }],
 };
 const ARCH = {
+  director: DIRECTOR,
   eyebrow: "Earshot / Architecture",
   title: "Agents drive one input service.",
   takeaway: "One native service does the clicking.",
@@ -192,8 +197,8 @@ describe("log precision and one perf image", () => {
     expect(html).not.toContain("Visibly below.");
   });
   it("one reply with two perf charts ships one image that carries both main numbers", async () => {
-    const time = { eyebrow: "Invoices / Performance", title: "Invoice list: 1.8 s to 240 ms.", takeaway: "Page time.", type: "range_chart", panels: [{ unit: "s", rows: [{ label: "Before", from: 1.8, to: 1.8, text: "1.8 s" }, { label: "After", from: 0.24, to: 0.24, text: "240 ms", tone: "good" }] }] };
-    const queries = { eyebrow: "Invoices / Performance", title: "One query per page.", takeaway: "Queries per page.", type: "range_chart", panels: [{ unit: "queries", rows: [{ label: "Before", from: 201, to: 201 }, { label: "After", from: 1, to: 1, tone: "good" }] }] };
+    const time = { director: DIRECTOR, eyebrow: "Invoices / Performance", title: "Invoice list: 1.8 s to 240 ms.", takeaway: "Page time.", type: "range_chart", panels: [{ unit: "s", rows: [{ label: "Before", from: 1.8, to: 1.8, text: "1.8 s" }, { label: "After", from: 0.24, to: 0.24, text: "240 ms", tone: "good" }] }] };
+    const queries = { director: DIRECTOR, eyebrow: "Invoices / Performance", title: "One query per page.", takeaway: "Queries per page.", type: "range_chart", panels: [{ unit: "queries", rows: [{ label: "Before", from: 201, to: 201 }, { label: "After", from: 1, to: 1, tone: "good" }] }] };
     const llm: LlmProvider = { name: "f", model: "f", complete: async () => JSON.stringify({ visuals: [time, queries] }) };
     const r = await buildExplain(llm, "Page 1.8 s to 240 ms, queries 201 to 1.");
     expect(r.visuals).toHaveLength(1);
@@ -204,6 +209,38 @@ describe("log precision and one perf image", () => {
     expect(r.visuals[0]!.html).toContain("<strong>1 query</strong>");
     // And it is drawn: one hairline per query, 201 against 1.
     expect(r.visuals[0]!.html.match(/<i><\/i>/g)).toHaveLength(202);
+  });
+});
+
+describe("perf chart: the cause on its own strip", () => {
+  const perf = (): unknown => ({ ...clone(RANGE), eyebrow: "Invoices / Performance", title: "One query cut the page to 240 ms.", illustrative: false, panels: [{ unit: "s", rows: [{ label: "Before", from: 1.8, to: 1.8, text: "1.8 s", note: "201 queries" }, { label: "After", from: 0.24, to: 0.24, text: "240 ms", tone: "good", note: "1 query" }] }] });
+  it("draws the strip below the axis, in the same image, not inside the timing rows", () => {
+    const html = renderExplainHtml(spec(perf()));
+    const chart = html.slice(html.indexOf('class="cd rg"'), html.indexOf('class="cd cs"'));
+    expect(html.indexOf('class="axis')).toBeLessThan(html.indexOf('class="cd cs"'));
+    expect(chart).not.toContain("<strong>");
+    expect(chart).not.toContain('class="qs"');
+    const strip = html.slice(html.indexOf('class="cd cs"'));
+    expect(strip).toContain("<strong>201 queries</strong>");
+    expect(strip).toContain("<strong>1 query</strong>");
+    expect(strip.match(/<i><\/i>/g)).toHaveLength(202);
+    expect(html.match(/<h1>/g)).toHaveLength(1);
+  });
+  it("makes the single query tick wide and gives row headers a white background", () => {
+    const html = renderExplainHtml(spec(perf()));
+    expect(html).toMatch(/\.qs i:only-child\{width:8px/);
+    expect(html).toMatch(/\.rh\{[^}]*background:#fff/);
+  });
+  it("shows no strip when no row carries a cause", () => {
+    expect(renderExplainHtml(spec(RANGE))).not.toContain('class="cd cs"');
+  });
+  it("keeps the note as text when the counts cannot be drawn as ticks", () => {
+    const o = perf() as { panels: { rows: { note: string }[] }[] };
+    o.panels[0]!.rows[0]!.note = "slow queries";
+    o.panels[0]!.rows[1]!.note = "fast queries";
+    const html = renderExplainHtml(spec(o));
+    expect(html).toContain("<strong>slow queries</strong>");
+    expect(html).not.toContain('class="qs"');
   });
 });
 

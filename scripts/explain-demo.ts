@@ -1,7 +1,8 @@
 // Live run of the explain stage over test/fixtures/explain/*.json through the configured provider (claude-cli by default).
 // Writes ~/earshot-demo/<out>[-2|-3].html (or <out>.NO_IMAGE.txt) and, with --shots, 390 and 1280 px PNGs per page
 // to ~/earshot-demo/shots/. Prints each visual's type and visual-content density so a weak candidate is visible.
-// Usage: pnpm tsx scripts/explain-demo.ts [--shots] [name ...]
+// Usage: pnpm tsx scripts/explain-demo.ts [--shots] [--final] [name ...]   # --shots: 390 px only; --final: 390 and 1280
+// Render on pro (macbook-only: Playwright); run: pnpm tsx scripts/explain-demo.ts --shots
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +16,8 @@ const FIX = join(import.meta.dirname, "..", "test", "fixtures", "explain");
 const OUT = process.env.EXPLAIN_OUT ?? join(homedir(), "earshot-demo");
 const args = process.argv.slice(2);
 const shots = args.includes("--shots");
+// Draft rounds render 390 px only; --final adds 1280 once, at the end.
+const widths = args.includes("--final") ? [390, 1280] : [390];
 const only = args.filter((a) => !a.startsWith("--"));
 
 const cfg = loadConfig();
@@ -43,6 +46,7 @@ for (const f of fixtures) {
       writeFileSync(file, v.html);
       const density = visualDensity(v.spec);
       pages.push({ name: f.name, file, density, reply: f.reply });
+      if (v.spec.director) console.log(`  director ${i + 1}: ${v.spec.director.intent} | first look: ${v.spec.director.firstLook}`);
       console.log(`  visual ${i + 1}: ${v.spec.type.padEnd(14)} density ${density.toFixed(2)}  "${v.spec.title}"  -> ${file}`);
     }
   } else writeFileSync(join(OUT, `${f.out}.NO_IMAGE.txt`), `NO_IMAGE (${r.reason})\n`);
@@ -55,7 +59,7 @@ if (shots && pages.length) {
   const browser = await chromium.launch();
   try {
     for (const p of pages) {
-      for (const width of [390, 1280]) {
+      for (const width of widths) {
         const page = await browser.newPage({ viewport: { width, height: 200 }, deviceScaleFactor: 2 });
         await page.goto(`file://${p.file}`);
         const path = join(OUT, "shots", `${p.name}-${width}-${p.file.split("/").pop()!.replace(/\.html$/, "")}.png`);

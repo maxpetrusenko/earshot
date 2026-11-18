@@ -96,7 +96,19 @@ export interface Metric {
   source: string;
 }
 
+/** The five director lines the model writes before the visual: what the picture is for, and how it will be judged. Logged and saved next to the page, never drawn. */
+export interface Director {
+  intent: string;
+  keyFrame: string;
+  firstLook: string;
+  twoSecondTest: string;
+  motion: string;
+}
+export const DIRECTOR_KEYS = ["intent", "key_frame", "first_look", "two_second_test", "motion"] as const;
+
 export interface ExplainSpec {
+  /** The director pass. Null when the model left it out; the gate rejects that. */
+  director: Director | null;
   title: string;
   takeaway: string;
   type: ExplainType;
@@ -221,6 +233,13 @@ export function isNoImage(raw: string): boolean {
  * Validate parsed model output. Returns null for no_image, a clean spec otherwise.
  * Throws ExplainError with a sentence the model can act on when the structure is unusable.
  */
+/** The `director` object of one visual. Null when it is missing or has no usable line; a partly filled one keeps its empty lines empty so the gate can name them. */
+export function parseDirector(raw: unknown): Director | null {
+  const r = rec(raw);
+  const d: Director = { intent: cleanText(r.intent, 200), keyFrame: cleanText(r.key_frame ?? r.keyFrame, 300), firstLook: cleanText(r.first_look ?? r.firstLook, 200), twoSecondTest: cleanText(r.two_second_test ?? r.twoSecondTest, 300), motion: cleanText(r.motion ?? r.motion_verdict, 200) };
+  return Object.values(d).some(Boolean) ? d : null;
+}
+
 export function parseExplain(raw: unknown): ExplainSpec | null {
   const o = rec(raw);
   if (o.no_image === true || (typeof raw === "string" && isNoImage(raw))) return null;
@@ -239,6 +258,7 @@ export function parseExplain(raw: unknown): ExplainSpec | null {
   const title = cleanText(o.title, 60);
   if (!title) throw new ExplainError('"title" is missing');
   return {
+    director: parseDirector(o.director),
     title,
     takeaway: cleanText(o.takeaway, 140),
     type,

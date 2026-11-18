@@ -2,7 +2,16 @@
  * A valid bug_before_after spec used by tests, as the model would return it.
  * It carries the v2 shape: per-panel impact caption, highlighted changed controls with arrow notes.
  */
+export const DIRECTOR = {
+  intent: "The viewer believes retries now stop after five tries.",
+  key_frame: "Two webhook logs, the endless loop above and the dead job below.",
+  first_look: "The highlighted retry counter bar.",
+  two_second_test: "With the text hidden the viewer can still point at the highlighted bar and the green button.",
+  motion: "No. A static comparison stays a still.",
+};
+
 export const EXPLAIN_SPEC = {
+  director: DIRECTOR,
   no_image: false,
   title: "Retries now stop at five",
   takeaway: "You get a dead-letter alert after five tries instead of a queue that retries forever.",

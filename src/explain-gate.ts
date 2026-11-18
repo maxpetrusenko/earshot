@@ -1,6 +1,21 @@
 import { cardLabels, cardsGate, isCardPanel } from "./explain-cards-gate.js";
 import type { ExplainSpec, Panel } from "./explain-schema.js";
 
+const DIRECTOR_LINES: readonly (readonly [keyof NonNullable<ExplainSpec["director"]>, string])[] = [
+  ["intent", "intent"],
+  ["keyFrame", "key_frame"],
+  ["firstLook", "first_look"],
+  ["twoSecondTest", "two_second_test"],
+  ["motion", "motion"],
+];
+
+/** Feedback when the director pass is missing or has an empty line; null when all five lines say something. */
+export function directorProblem(spec: ExplainSpec): string | null {
+  if (!spec.director) return 'the "director" object is missing: write intent, key_frame, first_look, two_second_test and motion before the visual';
+  const empty = DIRECTOR_LINES.filter(([k]) => spec.director![k].length < 3).map(([, name]) => name);
+  return empty.length ? `the "director" object has empty lines (${empty.join(", ")}): all five lines must say something` : null;
+}
+
 /** Labels that say a thing happened without showing it. As a whole element label they are rejected. */
 const EMPTY_LABELS = /^(?:fixed|implemented|completed|merged)[.!]?$/i;
 
@@ -110,6 +125,8 @@ function panelProblem(p: Panel, i: number): string | null {
  * Returns feedback for the model, or null when the spec passes.
  */
 export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY): string | null {
+  const noDirector = directorProblem(spec);
+  if (noDirector) return noDirector;
   if (isCardPanel(spec.panels[0])) {
     // Reference style: cards, a range axis or layers. No density measure; the rules are about content, not area.
     const p = spec.panels[0]!;
