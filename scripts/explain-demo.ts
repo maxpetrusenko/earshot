@@ -32,7 +32,7 @@ const fixtures = readdirSync(FIX)
   .map((f) => JSON.parse(readFileSync(join(FIX, f), "utf8")) as Fixture)
   .filter((f) => only.length === 0 || only.includes(f.name));
 
-const pages: { name: string; file: string; density: number }[] = [];
+const pages: { name: string; file: string; density: number; reply: string }[] = [];
 for (const f of fixtures) {
   const t = performance.now();
   const r = await buildExplain(llm, cfg.privacy.redact ? redact(f.reply).text : f.reply);
@@ -42,7 +42,7 @@ for (const f of fixtures) {
       const file = join(OUT, `${f.out}${i === 0 ? "" : `-${i + 1}`}.html`);
       writeFileSync(file, v.html);
       const density = visualDensity(v.spec);
-      pages.push({ name: f.name, file, density });
+      pages.push({ name: f.name, file, density, reply: f.reply });
       console.log(`  visual ${i + 1}: ${v.spec.type.padEnd(14)} density ${density.toFixed(2)}  "${v.spec.title}"  -> ${file}`);
     }
   } else writeFileSync(join(OUT, `${f.out}.NO_IMAGE.txt`), `NO_IMAGE (${r.reason})\n`);
@@ -60,6 +60,11 @@ if (shots && pages.length) {
         await page.goto(`file://${p.file}`);
         const path = join(OUT, "shots", `${p.name}-${width}-${p.file.split("/").pop()!.replace(/\.html$/, "")}.png`);
         await page.screenshot({ path, fullPage: true });
+        // The scorer reads the reply that drew the image from this sidecar.
+        writeFileSync(path.replace(/\.png$/, ".input.txt"), `${p.reply}\n`);
+        // Two-second test version: headline, eyebrow, subhead, captions and footer hidden, layout kept.
+        await page.addStyleTag({ content: ".ey,h1,.sb,.cc,.ft,.tk,.cp,.co{visibility:hidden!important}" });
+        await page.screenshot({ path: path.replace(/\.png$/, "-bare.png"), fullPage: true });
         console.log(`shot ${path}`);
         await page.close();
       }
