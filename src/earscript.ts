@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import type { LlmProvider } from "./llm.js";
 import { traceGeneration } from "./lib/llm-tracing.js";
 
-import { parseFlowSpec, type FlowSpec } from "./sketch.js";
 import { DEFAULT_STYLE, PROMPT_VERSION, PROMPTS, SHORT_MAX_WORDS, type ScriptStyle } from "./prompt-version.js";
 
 export { PROMPT_VERSION };
@@ -14,8 +13,6 @@ export interface EarScript {
   title: string;
   script: string;
   mermaid: string;
-  /** The structured flow for a multi-part task; null means no picture. */
-  flow: FlowSpec | null;
   evidence: string | null;
   words: number;
   retries: number;
@@ -185,7 +182,7 @@ function parseResult(raw: string, input: string, hosts: string[]): Omit<EarScrip
   const mermaid = typeof obj.mermaid === "string" ? obj.mermaid.trim() : "";
   if (!title) throw new EarScriptError('LLM output is missing "title"');
   if (!script) throw new EarScriptError('LLM output is missing "script"');
-  return { title, script, mermaid, flow: parseFlowSpec(obj.sketch), evidence: validEvidence(obj.evidence, input, hosts), words: countWords(script) };
+  return { title, script, mermaid, evidence: validEvidence(obj.evidence, input, hosts), words: countWords(script) };
 }
 
 export async function generateEarScript(llm: LlmProvider, input: string, evidenceHosts: string[] = [], style: ScriptStyle = DEFAULT_STYLE): Promise<EarScript> {

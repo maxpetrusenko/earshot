@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { accessSync, constants, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { sanitizeSvg } from "./svg-sanitize.js";
 
 /** Orca reads the page from $ORCA_CHAT_SCRATCH_DIR; the file must stay under 512 KB, we aim lower. */
 export const ORCA_BUDGET_BYTES = 480_000;
@@ -107,24 +106,6 @@ ${PAGE_JS.replace("__AUDIO__", () => audio)}
 `;
 }
 
-const FLOW_CSS = `body{margin:0;font-family:var(--font-sans,system-ui);background:var(--background,#fff);color:var(--foreground,#171717)}
-.ti{padding:10px 12px 4px;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sk{padding:4px 12px 10px;text-align:center}
-.sk svg{max-height:420px;max-width:100%;width:auto;height:auto}`;
-
-/** The flow page: the memo title over the diagram. No audio, no script. */
-export function renderFlowHtml(p: { title?: string; svg: string }): string {
-  const svg = sanitizeSvg(p.svg);
-  const title = p.title ? `<div class="ti">${escapeHtml(p.title)}</div>` : "";
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-${FLOW_CSS}
-</style></head><body>
-${title}<div class="sk">${svg}</div>
-</body></html>
-`;
-}
-
 export interface Fitted {
   html: string;
   bytes: number;
@@ -178,7 +159,7 @@ export function orcaDir(flag?: string, env: NodeJS.ProcessEnv = process.env): st
   }
 }
 
-export type OrcaKind = "player" | "flow";
+export type OrcaKind = "player" | "explain" | "explain2" | "explain3";
 
 export const orcaFileName = (id: string, kind: OrcaKind = "player"): string => `earshot-${id}-${kind}.html`;
 
@@ -186,11 +167,27 @@ export const orcaFileName = (id: string, kind: OrcaKind = "player"): string => `
 export const orcaLine = (file: string, title = "Listen"): string => `::orca-visual{file="${file}" title="${title}"}`;
 
 /** An earshot Orca line in a reply: the skill already ran. */
-const ORCA_LINE = /^::orca-visual\{file="earshot-[A-Za-z0-9]+(?:-player|-flow)?\.html"/m;
+/** -flow is the retired diagram page; replies that still carry its line count as narrated. */
+const ORCA_LINE = /^::orca-visual\{file="earshot-[A-Za-z0-9]+(?:-player|-explain[23]?|-flow)?\.html"/m;
 export const hasOrcaLine = (text: string): boolean => ORCA_LINE.test(text);
 
 export function writeOrcaPage(dir: string, id: string, html: string, kind: OrcaKind = "player"): string {
   const file = orcaFileName(id, kind);
   writeFileSync(join(dir, file), html, { mode: 0o600 });
   return file;
+}
+
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'", "#8217": "\u2019" };
+
+/** The page's own headline, for the `title` on an Orca line. Null when the page has no h1. */
+export function pageTitle(html: string): string | null {
+  const raw = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html)?.[1];
+  if (!raw) return null;
+  const text = raw
+    .replace(/<[^>]+>/g, "")
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(Number(d)))
+    .replace(/&([a-z0-9#]+);/gi, (m, n: string) => ENTITIES[n.toLowerCase()] ?? m)
+    .replace(/\s+/g, " ")
+    .trim();
+  return text || null;
 }

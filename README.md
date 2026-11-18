@@ -60,13 +60,17 @@ echo "Fixed the flaky webhook retries. The counter reset on every 5xx, so a dead
 
 Tap either word (or open the URL). Audio starts while the memo is still being made: the original in about 1.5 seconds, the edited memo in about 4. Both links are one MP3 that keeps growing until the track is complete, then it becomes a normal seekable file. The card with the diagram and transcript is at `/b/<id>`; `--format plain` prints the old two lines (`Listen: <url>` and `Original: <url>`), and `--format json` prints `{listen, listen_original, card, id}`.
 
+## Examples
+
+[`examples/`](examples/README.md) runs one reply through the whole pipeline: the two audio tracks, the edited script with the reasoning behind it, and two explainer pages with the data that drew them.
+
 ## Integrations
 
 | Agent | Command | How the link reaches you |
 |---|---|---|
 | Claude Code, skill | `earshot install claude-code` | Claude ends its reply with one line: Listen · Original |
 | Claude Code, hook | `earshot install claude-code --mode hook` | Stop hook message in the terminal UI |
-| Orca chat (default in Orca) | `earshot run --format auto` | an inline Web Audio player on Orca desktop (blank on iOS), a flow diagram only for bigger tasks, and the Listen · Original links last, see [Orca](docs/orca.md) |
+| Orca chat (default in Orca) | `earshot run --format auto` | an inline Web Audio player on Orca desktop (blank on iOS), a visual explanation of what changed when a picture helps, and the Listen · Original links last, see [Orca](docs/orca.md) |
 | Codex | `earshot install codex` | `notify` program, link in `~/.earshot/logs/hook.log` |
 | Any MCP client | `earshot install mcp --client claude-code` | the agent calls the `narrate` tool and prints the one-line links |
 | Anything else | `earshot run --from tagged` | reads the last `<narrate>...</narrate>` block from stdin |
