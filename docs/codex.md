@@ -2,11 +2,23 @@
 
 read_when: installing earshot into Codex CLI, changing the notify hook or the Codex extractor, or debugging a Codex turn that produced no memo.
 
-Three ways in, from most to least automatic:
+Four ways in:
 
-1. `notify` hook: every finished turn that passes the trigger gate becomes a memo. Codex shows no hook output, so the link is only in `~/.earshot/logs/hook.log`.
-2. MCP: Codex calls `narrate` and prints the link in its reply. See `docs/mcp.md`.
-3. `earshot run --from codex --session <id>`: by hand, for one named session.
+1. Instructions (recommended): `earshot install codex --mode instructions` adds a marked block to `$CODEX_HOME/AGENTS.md`. Codex runs `earshot run --format auto` with its final reply and ends the message with the printed links, so the link is in the chat, in the Codex TUI and in Orca. See below.
+2. `notify` hook: every finished turn that passes the trigger gate becomes a memo. Codex shows no hook output, so the link is only in `~/.earshot/logs/hook.log`. Codex allows one `notify` program, so this is unavailable when something else (the Computer Use app, for example) already owns it.
+3. MCP: Codex calls `narrate` and prints the link in its reply. See `docs/mcp.md`.
+4. `earshot run --from codex --session <id>`: by hand, for one named session.
+
+## Instructions
+
+```
+earshot install codex --mode instructions
+earshot uninstall codex --mode instructions    # plain `uninstall codex` removes the notify line and the block
+```
+
+The block sits between `<!-- earshot-managed:start -->` and `<!-- earshot-managed:end -->` (the same text the Claude Code skill and the Cursor hook use, `integrations/instructions/earshot.md`). Text outside the markers is never changed, a second install is a no-op, a changed command is updated in place, and the file is copied to `AGENTS.md.earshot-bak-<time>` before a write. Verified 2026-11-18 with Codex 0.145.0 (`codex exec`): the reply ended with the Listen and Original line.
+
+The same installer covers other agents that read a global instruction file: `earshot install opencode` (`~/.config/opencode/AGENTS.md`), `gemini` (`~/.gemini/GEMINI.md`) and `droid` (`~/.factory/AGENTS.md`).
 
 ## notify
 

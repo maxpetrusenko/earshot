@@ -8,6 +8,21 @@ Orca's native chat renders an HTML page inline when a reply has `::orca-visual{f
 2. `earshot-<id>-explain.html`, `-explain2.html`, `-explain3.html`: one page per concept, only for the concepts worth a picture (see Explain below). Display-only, and they show on iPhone. The line's title is the page's own headline. In `--format auto` the chat gets an Explain line only with `--visual` (see below); otherwise the pages go on the card behind the links.
 3. `[Listen](...) · [Original](...)`, always the last line.
 
+## Agents in Orca
+
+Orca launches any agent in its catalog (`orca orchestration worker-start --agent <alias>`: claude, codex, opencode, opencode2, cursor-agent, gemini, droid, hermes and about forty more). The `::orca-visual` line works for whichever agent prints it, so each agent needs the earshot step in its own instructions:
+
+| Agent | Install |
+|---|---|
+| Claude Code | `earshot install claude-code` (skill) |
+| Codex | `earshot install codex --mode instructions` |
+| Cursor | `earshot install cursor` |
+| opencode, opencode2 | `earshot install opencode` |
+| Gemini CLI | `earshot install gemini` |
+| Droid | `earshot install droid` |
+
+A host reaches the links from a phone over the tailnet. On a host whose Tailscale is the macOS system-extension build (uniclaw), the CLI cannot reach the daemon over ssh, so set `serve.mode: tailnet-ip`: earshot then reads the tailnet IPv4 from the network interfaces (100.64.0.0/10) when `tailscale status` fails, and serves and links `http://<tailnet ip>:7777`.
+
 ## Frame height
 
 Orca's visual shell (`native-chat-visual-shell`) reports `documentElement.getBoundingClientRect().height` (plus any body overflow) as the frame height. It ignores a height of 0, so a page that is `display:none` leaves the frame at its 160 px default, and it clamps the result to at least 80 px. The player is therefore as tall as its content with nothing added: `html` and `body` have margin 0, padding 0 and no min-height, and the bar is 80 px (`ORCA_MIN_FRAME_PX`) with the row centered, so the frame has no blank band under the row. A status message grows the bar. On iOS the page reports 1 px: the frame is 80 px and empty, the lowest Orca allows.
