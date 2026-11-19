@@ -160,7 +160,7 @@ export function uiGroundingProblem(spec: ExplainSpec, reply: string): string | n
  * Quality gate before rendering: would someone understand the change from the picture alone?
  * Returns feedback for the model, or null when the spec passes.
  */
-export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY, reply?: string): string | null {
+export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY, reply?: string, situation?: string): string | null {
   const noDirector = directorProblem(spec);
   if (noDirector) return noDirector;
   // The parser keeps a long footer whole so it is never cut mid-sentence; the model is asked to shorten it instead.
@@ -172,7 +172,7 @@ export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY,
     if (empty) return `"${empty}" is a bare status label; show the actual values instead of labeling them`;
     const fake = cardLabels(p).find((l) => PLACEHOLDER.test(l));
     if (fake) return `"${fake}" describes a picture instead of being one; use the real component names and values`;
-    return cardsGate(spec);
+    return cardsGate(spec, { ...(situation ? { situation } : {}), ...(reply !== undefined ? { reply } : {}) });
   }
   const beforeAfter = spec.type === "ui_before_after" || spec.type === "bug_before_after";
   if (beforeAfter && spec.panels.length < 2) return "a before/after type needs exactly two panels, before then after";

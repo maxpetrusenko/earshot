@@ -5,6 +5,7 @@
  */
 
 import { cardsPanel, flowPanel, gridPanel, layersPanel, rangePanel, rankedPanel, type CardsPanel, type FlowPanel, type GridPanel, type LayersPanel, type RangePanel, type RankedPanel } from "./explain-cards-schema.js";
+import { inferFooterTone, parseFooterTone, parseSpan, type FooterTone, type SpanRef, type Stat } from "./explain-stat.js";
 import { arr, cleanText, cleanWords, num, oneOf, rec } from "./explain-util.js";
 
 export { cleanText };
@@ -122,6 +123,14 @@ export interface ExplainSpec {
   footer: string;
   /** The values are illustrative, not measured; the eyebrow must say so. */
   illustrative: boolean;
+  /** Color of the footer dot: risk amber, bad red, good green, neutral gray. The model's own word, or inferred from the footer when it gave none. */
+  footerTone: FooterTone;
+  /** True when the model set the tone; the gate only compares an explicit tone with the footer's wording. */
+  footerToneSet: boolean;
+  /** The two clock times the model named for a span in the reply; code turns them into `stat` (see explain-stat.ts). */
+  span: SpanRef | null;
+  /** The one duration stat, computed in code from a span the reply states. */
+  stat: Stat | null;
 }
 
 export const MAX = { panels: 2, elements: 8, lanes: 4, segments: 6, actors: 5, messages: 8, components: 7, edges: 9, callouts: 3, metrics: 3, assumptions: 4, steps: 5, visuals: 3 };
@@ -272,6 +281,10 @@ export function parseExplain(raw: unknown): ExplainSpec | null {
     eyebrow: cleanText(o.eyebrow, 48),
     footer: cleanWords(o.footer, 240),
     illustrative: o.illustrative === true,
+    footerTone: parseFooterTone(o.footer_tone ?? o.footerTone) || inferFooterTone(cleanWords(o.footer, 240)),
+    footerToneSet: parseFooterTone(o.footer_tone ?? o.footerTone) !== "",
+    span: parseSpan(o.span),
+    stat: null,
   };
 }
 

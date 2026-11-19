@@ -18,7 +18,8 @@ const OUT = process.env.EXPLAIN_OUT ?? join(homedir(), "earshot-demo");
 const args = process.argv.slice(2);
 const shots = args.includes("--shots");
 // Draft rounds render 390 px only; --final adds 1280 once, at the end.
-const widths = args.includes("--final") ? [390, 1280] : [390];
+const widthsArg = args.find((a) => a.startsWith("--widths="));
+const widths = widthsArg ? widthsArg.slice(9).split(",").map(Number) : args.includes("--final") ? [390, 1280] : [390];
 const only = args.filter((a) => !a.startsWith("--"));
 
 const cfg = loadConfig();
@@ -70,7 +71,7 @@ if (shots && pages.length) {
         // The scorer reads the reply that drew the image from this sidecar.
         writeFileSync(path.replace(/\.png$/, ".input.txt"), `${p.reply}\n`);
         // Two-second test version: headline, eyebrow, subhead, captions and footer hidden, layout kept.
-        await page.addStyleTag({ content: ".ey,h1,.sb,.cc,.ft,.tk,.cp,.co{visibility:hidden!important}" });
+        await page.addStyleTag({ content: ".ey,h1,.sb,.stat,.cc,.ft,.tk,.cp,.co{visibility:hidden!important}" });
         await page.screenshot({ path: path.replace(/\.png$/, "-bare.png"), fullPage: true });
         console.log(`shot ${path}`);
         await page.close();

@@ -153,14 +153,15 @@ function body(p: CardsPanel | RangePanel | LayersPanel | FlowPanel | RankedPanel
 /** The reference-style page for a spec whose first panel is cards, range or layers. */
 export function renderCardsHtml(spec: ExplainSpec, p: CardsPanel | RangePanel | LayersPanel | FlowPanel | RankedPanel | GridPanel): string {
   const eyebrow = spec.eyebrow.split("/").map((s) => e(s.trim())).join(' <span>/</span> ');
-  const footer = spec.footer ? `<p class="ft"><i></i>${e(spec.footer)}</p>` : "";
+  const footer = spec.footer ? `<p class="ft ft-${spec.footerTone}"><i></i>${e(spec.footer)}</p>` : "";
+  const stat = spec.stat ? `<p class="stat"><span class="stat-v">${e(spec.stat.value)}</span>${spec.stat.label ? `<span class="stat-l">${e(spec.stat.label)}</span>` : ""}<span class="stat-r">${e(spec.stat.range)}</span></p>` : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 ${CARDS_CSS}
 ${FLOW_CSS}
 </style></head><body class="k-${spec.type}"><main class="pg">
 <p class="ey">${eyebrow}</p><h1>${e(spec.title)}</h1><p class="sb">${e(spec.takeaway)}</p>
-${body(p, spec.type)}
+${stat}${body(p, spec.type)}
 ${footer}
 </main></body></html>
 `;

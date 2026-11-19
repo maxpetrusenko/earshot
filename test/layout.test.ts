@@ -11,7 +11,7 @@ const same = (name: string) => ({ name, detail: "same", icon: "file" });
 
 describe("two-lane flows collapse unchanged steps", () => {
   const spec = flow({
-    before: [same("Receive job"), same("Call billing API"), { name: "Handle 429", icon: "alert", state: "broken", note: "marks job failed" }, same("Write result")],
+    before: [same("Receive job"), same("Call billing API"), { name: "Handle 429", icon: "alert", state: "cause", note: "marks job failed" }, same("Write result")],
     after: [same("Receive job"), same("Call billing API"), { name: "Handle 429", icon: "retry", state: "changed", note: "retries five times" }, same("Write result")],
   });
   const html = renderExplainHtml(spec);
@@ -19,11 +19,11 @@ describe("two-lane flows collapse unchanged steps", () => {
     expect(html).toContain("2 unchanged steps");
     expect(html).toContain("1 unchanged step<");
     expect((html.match(/class="fc /g) ?? []).length).toBe(2);
-    expect(html).toContain("BROKEN");
+    expect(html).toContain("ROOT CAUSE");
   });
   it("does not need an icon on a collapsed step", () => {
     const bare = flow({
-      before: [{ name: "Receive job" }, { name: "Call billing API" }, { name: "Handle 429", icon: "alert", state: "broken", note: "x" }],
+      before: [{ name: "Receive job" }, { name: "Call billing API" }, { name: "Handle 429", icon: "alert", state: "cause", note: "x" }],
       after: [{ name: "Receive job" }, { name: "Call billing API" }, { name: "Handle 429", icon: "retry", state: "changed", note: "y" }],
     });
     expect(flowProblem(bare.panels[0] as never)).toBeNull();
@@ -39,12 +39,12 @@ describe("two-lane flows collapse unchanged steps", () => {
 
 describe("a one-lane bug flow shows the fix on the broken step", () => {
   it("draws the fix inside the broken card", () => {
-    const s = flow({ steps: [same("Send webhook"), { name: "Rebuild request", icon: "retry", state: "broken", note: "counter reset", fix: "counter moved to the job record" }, same("Check attempts")] });
-    expect(renderExplainHtml(s)).toMatch(/s-broken[\s\S]*fs-fix[\s\S]*counter moved to the job record/);
+    const s = flow({ steps: [same("Send webhook"), { name: "Rebuild request", icon: "retry", state: "cause", note: "counter reset", fix: "counter moved to the job record" }, same("Check attempts")] });
+    expect(renderExplainHtml(s)).toMatch(/s-cause[\s\S]*fs-fix[\s\S]*counter moved to the job record/);
   });
   it("accepts an 80 character note", () => {
     const note = "n".repeat(80);
-    const s = flow({ steps: [same("Send webhook"), { name: "Rebuild request", icon: "retry", state: "broken", note }, same("Check attempts")] });
+    const s = flow({ steps: [same("Send webhook"), { name: "Rebuild request", icon: "retry", state: "cause", note, fix: "move it" }, same("Check attempts")] });
     expect(flowProblem(s.panels[0] as never)).toBeNull();
   });
 });
