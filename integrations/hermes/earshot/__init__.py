@@ -10,6 +10,10 @@ also renders the explain image to a PNG (`--explain-png`). A detached deliverer 
 file run as a script) waits for the PNG and hands it to `hermes send`, Hermes's own sender, as a
 `MEDIA:` attachment: a photo on Telegram, an m.image on Matrix. The hook returns before any of that.
 
+Picture trigger: a second hook, pre_llm_call, records the user's message per session. The run gets
+it as EARSHOT_USER_PROMPT (and a `--session hermes-<id>` key for the rate limit), so earshot can tell
+when a picture was asked for. Without it the reply-only rules apply.
+
 Skipped: platforms outside EARSHOT_HERMES_PLATFORMS (default cli, tui, telegram, matrix; cron
 and whatsapp are never narrated), replies under EARSHOT_HERMES_MIN_CHARS (80), replies that
 already carry an earshot link. Photos need telegram or matrix, chat type dm, a chat in
@@ -45,6 +49,29 @@ SEND_TIMEOUT_S = 90
 LINK_LINE = re.compile(r"^\[Listen\]\([^)\s]+\) · \[Original\]\([^)\s]+\)\s*$", re.MULTILINE)
 HAS_LINK = re.compile(r"/b/[A-Za-z0-9]{8,}/(edited|original)\.mp3")
 BRIEF_ID = re.compile(r"/b/([A-Za-z0-9]{8,})/")
+
+
+# The user's latest message per Hermes session, from the pre_llm_call hook, so earshot can tell when a picture was asked for.
+_LAST_USER: dict[str, str] = {}
+_TURN: dict[str, str] = {}
+_MAX_SESSIONS = 64
+
+
+def remember_user_message(session_id: str = "", user_message: str = "", **kwargs):
+    """pre_llm_call: keep the user's message for this session. Never changes the turn."""
+    try:
+        if session_id and isinstance(user_message, str):
+            if len(_LAST_USER) >= _MAX_SESSIONS and session_id not in _LAST_USER:
+                _LAST_USER.pop(next(iter(_LAST_USER)))
+            _LAST_USER[session_id] = user_message[:4000]
+    except Exception:  # pragma: no cover - a hook must never raise
+        pass
+    return None
+
+
+def _session_key(session_id: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", session_id or "")[:70]
+    return f"hermes-{safe}" if safe else ""
 
 
 def _platforms() -> set[str]:
@@ -194,9 +221,12 @@ def _links_for(text: str, photo_dir: str | None = None) -> str | None:
         return None
     env = dict(os.environ)
     env["PATH"] = os.pathsep.join(filter(None, [env.get("PATH"), "/opt/homebrew/bin", "/usr/local/bin"]))
+    if _TURN.get("prompt"):
+        env["EARSHOT_USER_PROMPT"] = _TURN["prompt"]
+    session_args = ["--session", _TURN["session"]] if _TURN.get("session") else []
     try:
         done = subprocess.run(
-            [binary, "run", *_explain_args(photo_dir)],
+            [binary, "run", *_explain_args(photo_dir), *session_args],
             input=text, capture_output=True, text=True, timeout=RUN_TIMEOUT_S, env=env, check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
@@ -272,6 +302,8 @@ def transform_llm_output(response_text: str, session_id: str = "", model: str = 
     text = response_text or ""
     if len(text.strip()) < _min_chars() or HAS_LINK.search(text):
         return None
+    _TURN.clear()
+    _TURN.update({"prompt": _LAST_USER.get(session_id or "", ""), "session": _session_key(session_id)})
     photo_dir = target = None
     cfg: dict = {}
     try:
@@ -320,6 +352,7 @@ def _photo_root() -> str:
 
 
 def register(ctx):
+    ctx.register_hook("pre_llm_call", remember_user_message)
     ctx.register_hook("transform_llm_output", transform_llm_output)
 
 

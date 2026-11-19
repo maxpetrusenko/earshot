@@ -8,8 +8,8 @@ import { formatBytes, pruneBriefs, pruneIfDue, stampPruned } from "./prune.js";
 import { startDetached } from "./detach.js";
 import { briefLinks, listenLines, listenMarkdown } from "./links.js";
 import { prepareBrief } from "./prepare.js";
-import { extractLastMessage, findTranscript, isSafeSessionId, normalizeSession } from "./extract/claude-code.js";
-import { extractCodexLast, findCodexSession, isSafeCodexId } from "./extract/codex.js";
+import { extractLastMessage, findTranscript, isSafeSessionId, lastUserPrompt, normalizeSession, readTail } from "./extract/claude-code.js";
+import { extractCodexLast, findCodexSession, isSafeCodexId, lastCodexUserPrompt } from "./extract/codex.js";
 import { extractStdin, normalizeInput } from "./extract/stdin.js";
 import { extractTagged } from "./extract/tagged.js";
 import { handleStop, type StopPayload } from "./hook/claude-code.js";
@@ -23,7 +23,9 @@ import { mcpInstall, mcpUninstall, MCP_CLIENTS, type McpClient } from "./install
 import { netFetch } from "./lib/net.js";
 import { createLlm } from "./llm.js";
 import { orcaDir } from "./orca.js";
-import { classifyReply, shouldAutoVisual, type Classification } from "./situation.js";
+import { classifyReply } from "./situation.js";
+import { decideVisual, type Decision } from "./trigger.js";
+import { readTriggerState, recordTriggerState } from "./trigger-state.js";
 import { renderFallbackHtml } from "./explain-fallback.js";
 import { redact } from "./redact.js";
 import { armOrcaDeadline, EXPLAIN_MIN_CHARS, finishExplain, finishPlayer, orcaLines, orcaOutput, type OrcaJob } from "./orca-output.js";
@@ -84,6 +86,7 @@ interface RunFlags {
   explain: boolean;
   explainPng?: boolean;
   visual?: boolean;
+  promptFile?: string;
   audio: boolean;
   json?: boolean;
   format?: string;
@@ -94,10 +97,40 @@ interface RunFlags {
 
 class UsageError extends Error {}
 
-/** --visual forces the picture on, --no-visual forces it off; otherwise visuals.auto decides from the reply (situation not none, 600+ chars). */
-function wantVisual(flag: boolean | undefined, auto: boolean, text: string, cls?: Classification): boolean {
-  if (flag !== undefined) return flag;
-  return auto && shouldAutoVisual(text, cls);
+/**
+ * The user's latest message, for the trigger: --prompt-file, then EARSHOT_USER_PROMPT, then the agent's own transcript
+ * (Claude Code by --transcript or session, Codex by rollout). Null when none is available; the reply-only rules apply then.
+ */
+function userPrompt(flags: RunFlags): string | null {
+  try {
+    if (flags.promptFile) return readFileSync(flags.promptFile, "utf8");
+    const env = process.env.EARSHOT_USER_PROMPT;
+    if (env?.trim()) return env;
+    const from = flags.from ?? "";
+    if (flags.transcript || flags.session) {
+      if (from !== "codex") {
+        const path = flags.transcript ?? (flags.session ? findTranscript(process.cwd(), flags.session) : null);
+        const raw = path ? readTail(path) : null;
+        const p = raw ? lastUserPrompt(raw) : null;
+        if (p) return p;
+      }
+      if (from === "codex" || from === "") {
+        const path = flags.transcript ?? (flags.session && isSafeCodexId(flags.session) ? findCodexSession(flags.session) : null);
+        const raw = path ? readTail(path, 8 * 1024 * 1024) : null;
+        const p = raw ? lastCodexUserPrompt(raw) : null;
+        if (p) return p;
+      }
+    }
+  } catch {
+    /* no prompt: the reply-only rules decide */
+  }
+  return null;
+}
+
+/** --visual forces the picture on, --no-visual forces it off; otherwise the user's ask or strong evidence in the reply decides (see trigger.ts). */
+function decide(flags: RunFlags, cfg: Config, text: string): Decision {
+  const d = decideVisual({ reply: text, prompt: userPrompt(flags), flag: flags.visual, autoOn: cfg.visuals.auto, state: readTriggerState(flags.session) });
+  return d;
 }
 
 /** Old briefs go at the start of a run, at most once an hour. A failure here never stops the memo. */
@@ -146,10 +179,11 @@ async function runCommand(flags: RunFlags): Promise<number> {
     // The explain page is still made (card page, optional PNG) when the reply is long enough; it is never printed as a chat line.
     // --visual is the caller asking for a picture: the Explain line prints now and a page is guaranteed behind it.
     const explainOn = flags.sketch && flags.explain && cfg.image.type !== "none";
-    const cls = classifyReply(input.text);
-    const visual = wantVisual(flags.visual, cfg.visuals.auto, input.text, cls) && explainOn;
+    const dec = decide(flags, cfg, input.text);
+    const visual = dec.visual && explainOn;
     if (flags.visual && !explainOn) log("--visual ignored: the explain stage is off (--no-explain, --no-sketch or image.type none)");
-    log(`situation ${cls.situation} (${cls.route}), visual ${visual ? "on" : "off"}`);
+    log(`situation ${dec.situation}, visual ${visual ? "on" : "off"} (${dec.why})`);
+    if (!flags.dryRun) recordTriggerState(flags.session, { image: visual, auto: dec.auto && visual });
     const withExplain = visual || (explainOn && input.text.length >= EXPLAIN_MIN_CHARS);
     const job = startDetached(cfg, input.text, { from: input.from, session: flags.session, configPath: flags.config ? resolve(flags.config) : undefined, orca: { dir: scratch!, explain: withExplain, png: flags.explainPng === true, visual }, log });
     log(`worker pid ${job.pid}, log ${job.log}`);
@@ -169,14 +203,16 @@ async function runCommand(flags: RunFlags): Promise<number> {
     log(`${ear.words} words, ${ear.retries} retries`);
     return 0;
   }
+  const dec = decide(flags, cfg, input.text);
   const prep = prepareBrief(cfg, input.text, { from: input.from, session: flags.session, log });
   const base = await cachedBaseUrl(cfg.serve);
   // The links go out before any work: the server streams each track while it is still being made.
   // --format orca prints its lines after the audio is complete instead.
   if (!orca) out(base, prep.meta.id);
+  if (orca) recordTriggerState(flags.session, { image: dec.visual, auto: dec.auto });
   let result;
   try {
-    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch || !flags.explain, explain: orca, visual: orca && wantVisual(flags.visual, cfg.visuals.auto, input.text), situation: classifyReply(input.text).situation, noAudio: !flags.audio, waitForAudio: orca, log });
+    result = await executeBrief(cfg, llm, prep, { from: input.from, session: flags.session, title: flags.title, voice: flags.voice, noSketch: !flags.sketch || !flags.explain, explain: orca, visual: orca && dec.visual, situation: dec.visual ? dec.situation : classifyReply(input.text).situation, noAudio: !flags.audio, waitForAudio: orca, log });
   } catch (e) {
     if (e instanceof NothingUsableError) {
       err(`earshot: nothing usable was produced: ${e.message}`);
@@ -232,6 +268,7 @@ program
   .option("--explain-png", "also render the explanation as a 1080x1350 PNG next to the page (needs playwright and a Chromium)")
   .option("--visual", "force the Explain picture on (default: automatic, see visuals.auto): the Explain ::orca-visual line prints at once; the worker writes the model's image, or a deterministic what-changed card when the model draws nothing")
   .option("--no-visual", "force the Explain picture off")
+  .option("--prompt-file <path>", "the user's latest message, so the trigger can tell when a picture was asked for (also EARSHOT_USER_PROMPT; claude-code and codex sessions are read from their transcripts)")
   .option("--no-audio", "skip the audio")
   .option("--json", "same as --format json")
   .option("--format <format>", "text (one markdown line: [Listen](...) · [Original](...)), plain (two Listen: lines), json ({listen, listen_original, card, id}) orca (wait for the audio, write an inline player page for Orca chat, print the ::orca-visual line, then the links) or auto (never waits: in Orca, stand-in player pages and the ::orca-visual lines at once and the worker fills them in; elsewhere the links at once)")

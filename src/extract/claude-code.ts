@@ -84,6 +84,20 @@ export function lastTurn(jsonl: string): Turn {
   };
 }
 
+/** Text of a user entry: a string, or its text blocks. */
+function userText(e: Entry): string {
+  const c = e.message?.content;
+  if (typeof c === "string") return c;
+  return Array.isArray(c) ? c.filter((b) => b.type === "text" && typeof b.text === "string").map((b) => b.text).join("\n") : "";
+}
+
+/** The last real user message in a transcript (what the current reply answers), or null. */
+export function lastUserPrompt(jsonl: string): string | null {
+  const real = parseEntries(jsonl).filter((e) => !e.isSidechain && isRealUser(e));
+  const last = real[real.length - 1];
+  return last ? userText(last).trim() || null : null;
+}
+
 /** Read the last maxBytes of a file, dropping a torn first line. A missing file is null. */
 export function readTail(path: string, maxBytes = 1024 * 1024): string | null {
   let fd: number | undefined;

@@ -90,6 +90,21 @@ export function lastCodexTurn(jsonl: string): CodexTurn {
   return { text: text?.trim() || null, toolUses, sawTurn: start >= 0 };
 }
 
+/** The last user message in a rollout (event_msg user_message, else a user response_item), or null. */
+export function lastCodexUserPrompt(jsonl: string): string | null {
+  let last: string | null = null;
+  for (const e of parseCodexEntries(jsonl)) {
+    const p = e.payload as (typeof e.payload & { message?: string }) | undefined;
+    if (!p) continue;
+    if (e.type === "event_msg" && p.type === "user_message" && typeof p.message === "string" && p.message.trim()) last = p.message.trim();
+    else if (e.type === "response_item" && p.type === "message" && p.role === "user" && Array.isArray(p.content)) {
+      const t = p.content.filter((b) => b?.type === "input_text" && typeof b.text === "string").map((b) => b.text!).join("\n").trim();
+      if (t && !t.startsWith("<")) last = t;
+    }
+  }
+  return last;
+}
+
 export const codexHome = () => process.env.CODEX_HOME ?? join(homedir(), ".codex");
 
 /** Session ids become part of a file name match; accept only UUID-like ids. */
