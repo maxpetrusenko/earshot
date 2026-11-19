@@ -54,7 +54,7 @@ describe("flow notes and footers are shortened by the model, not cut by the pars
   it("keeps a long note whole and the gate asks for a shorter one", () => {
     const long = "Two internal scripts expect the file. Keep a flag for one release so they can switch.";
     const s = parseExplain(flow(long))!;
-    expect(explainGate(s)).toMatch(/note on "Change POST" is \d+ characters; at most 64/);
+    expect(explainGate(s)).toMatch(/note on "Change POST" is \d+ characters; at most 80/);
     expect(explainGate(parseExplain(flow("Two scripts expect the old file"))!)).toBeNull();
   });
   it("a footer over 120 characters is sent back, not cut", () => {

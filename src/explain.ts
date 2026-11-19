@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { EarScriptError, extractJson } from "./earscript.js";
+import { shortenFlowText } from "./explain-flow.js";
 import { explainGate } from "./explain-gate.js";
 import { renderExplainHtml } from "./explain-render.js";
 import { ExplainError, isNoImage, parseExplainAll, type Director, type ExplainSpec } from "./explain-schema.js";
@@ -64,7 +65,9 @@ export async function buildExplain(llm: LlmProvider, reply: string, opts: { situ
         const raw = await traceGeneration("explain", { model: llm.model, input: user, metadata: { prompt: EXPLAIN_PROMPT.version, retries } }, () => llm.complete({ system, user, json: true }));
         if (isNoImage(raw)) return none(retries, "no_image");
         try {
-          const specs = mergeRangeCharts(parseExplainAll(extractJson(raw)));
+          const parsed = mergeRangeCharts(parseExplainAll(extractJson(raw)));
+          // The model was already asked once to shorten a long note; the second time the program cuts it at a word instead of dropping the picture.
+          const specs = retries === 1 ? parsed.map(shortenFlowText) : parsed;
           if (specs.length === 0) return none(retries, "no_image");
           // Each concept is gated alone. Passing ones ship; if some fail on the first try the model is asked once to fix the set.
           const bads = specs.map((sp) => explainGate(sp, undefined, reply));

@@ -66,3 +66,22 @@ Nine situation fixtures at 390 px. Two Sonnet draft rounds, then Opus final (`ex
 | ui | ui_before_after, then flow | 6 | no image (too sparse) | 6 (flow) |
 
 Not approved: one of eight scored images reaches 8 (perf). Remaining complaints: both columns of a two-lane flow repeat the unchanged steps (tall image), the schema mockup is tall with many outlined columns, the bug image shows the fix only in the footer. Opus scored the bug image 5 before the footer fix and 7 now. The earlier Opus schema error did not recur; the scorer now retries and names the cause.
+
+
+## Layout pass (prompt format v9)
+
+Nine situation fixtures at 390 px, three rounds. Sonnet drafted every image; rounds 0 to 2 were scored by Sonnet, round 3 by Opus (`--final`). Round 0 is the baseline before the pass. Changes: unchanged steps collapse in two-lane flows, a fix shown on the broken step, mockup rows capped at four, flow note limit 80 with a word cut on the last attempt, wider ranked and grid text, stacked architecture item details.
+
+| Situation | R0 Sonnet | R1 Sonnet | R2 Sonnet | R3 Opus |
+|---|---|---|---|---|
+| architecture | 7 | 8 | 7 | 7 |
+| perf | 6 | 7 | 7 | 8 |
+| bug | 7 | 2s fail | 8 | 7 |
+| hosts | 7 | 7 | 8 | 8 |
+| logic | 7 | no image (icon gate) | 8 | 7 |
+| options | 7 | 5 | 7 | 7 |
+| plan | no image | no image (icon gate) | no image (note 84 chars) | 5 |
+| schema | 7 | 8 | 7 | 2s fail |
+| ui | 5 | 6 | 7 | 6 |
+
+Not approved: no situation reached 8 on Opus except perf and hosts. Open complaints from the Opus round: the plan decision step is labeled CHANGED and its note is cut; the ui flow mockup contradicts its labels; the architecture headline picks a side detail; the bug image is tall; the schema pair fails the two-second test (near-identical stacks).

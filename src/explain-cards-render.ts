@@ -124,7 +124,7 @@ function range(p: RangePanel): string {
 }
 
 function node(n: LayerItem): string {
-  return `<div class="nd">${icon(n.icon)}<p class="nn">${e(n.name)}</p>${n.detail ? `<p class="nx">${e(n.detail)}</p>` : ""}</div>`;
+  return `<div class="nd">${icon(n.icon)}<p class="nn">${e(n.name)}</p>${n.detail ? `<p class="nx">${n.detail.split(" / ").map(e).join("<br>")}</p>` : ""}</div>`;
 }
 
 function layer(l: Layer): string {

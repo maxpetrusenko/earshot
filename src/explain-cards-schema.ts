@@ -45,6 +45,8 @@ export interface FlowStep {
   state: StepState;
   /** Broken: the cause. Changed: what is different now. */
   note: string;
+  /** Broken step of a one-lane bug flow: what the fix did to this step, drawn on the step itself. */
+  fix: string;
 }
 export interface FlowLane {
   /** BEFORE or AFTER on a two-lane flow; empty on a single lane. */
@@ -198,7 +200,7 @@ export function layersPanel(p: Record<string, unknown>): LayersPanel {
 
 const flowStep = (v: unknown): FlowStep => {
   const r = rec(v);
-  return { name: cleanWords(r.name, 28), detail: cleanWords(r.detail, STEP_PARSE_MAX.detail), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, STEP_STATES, "ok"), note: cleanWords(r.note, STEP_PARSE_MAX.note) };
+  return { name: cleanWords(r.name, 28), detail: cleanWords(r.detail, STEP_PARSE_MAX.detail), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, STEP_STATES, "ok"), note: cleanWords(r.note, STEP_PARSE_MAX.note), fix: cleanWords(r.fix, STEP_PARSE_MAX.note) };
 };
 
 export function flowPanel(p: Record<string, unknown>): FlowPanel {
@@ -211,7 +213,7 @@ export function flowPanel(p: Record<string, unknown>): FlowPanel {
 export function rankedPanel(p: Record<string, unknown>): RankedPanel {
   const items: RankedItem[] = arr(p.items).slice(0, 5).map((v) => {
     const r = rec(v);
-    return { name: cleanText(r.name, 30), detail: cleanWords(r.detail, 70), recommended: r.recommended === true };
+    return { name: cleanText(r.name, 44), detail: cleanWords(r.detail, 120), recommended: r.recommended === true };
   }).filter((i) => i.name);
   return { kind: "ranked", label: "", caption: "", items };
 }
@@ -219,7 +221,7 @@ export function rankedPanel(p: Record<string, unknown>): RankedPanel {
 export function gridPanel(p: Record<string, unknown>): GridPanel {
   const cells: GridCell[] = arr(p.cells).slice(0, 6).map((v) => {
     const r = rec(v);
-    return { name: cleanText(r.name, 20), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, CELL_STATES, "ok"), line: cleanWords(r.line, 64) };
+    return { name: cleanText(r.name, 20), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, CELL_STATES, "ok"), line: cleanWords(r.line, 96) };
   }).filter((c) => c.name);
   return { kind: "grid", label: "", caption: "", cells };
 }

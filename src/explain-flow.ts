@@ -1,3 +1,4 @@
+import { cleanWords } from "./explain-util.js";
 import type { FlowPanel, FlowStep, GridPanel, RankedPanel } from "./explain-cards-schema.js";
 
 /** Gates for the three list-shaped panels: a flow, ranked options and a host grid. Each returns feedback the model can act on, or null. */
@@ -15,8 +16,8 @@ const marked = (steps: FlowStep[]): FlowStep[] => steps.filter((s) => s.state !=
  * required: a flow with nothing marked is only a chain of boxes. A broken step carries its cause. Two lanes share
  * positions, so they must have the same number of steps and each lane must mark where it differs.
  */
-/** What the picture has room for; matches the prompt (detail 30, note 64). */
-export const STEP_LIMIT = { detail: 34, note: 64 };
+/** What the picture has room for; matches the prompt (detail 30, note 80, fix 80). */
+export const STEP_LIMIT = { detail: 34, note: 80, fix: 80 };
 
 export function flowProblem(p: FlowPanel): string | null {
   if (p.lanes.length > 2) return "a flow has one lane or two (before and after)";
@@ -24,10 +25,14 @@ export function flowProblem(p: FlowPanel): string | null {
     if (lane.steps.length < FLOW_MIN || lane.steps.length > FLOW_MAX) return `each flow lane needs ${FLOW_MIN} to ${FLOW_MAX} steps, got ${lane.steps.length}`;
     const generic = lane.steps.find((s) => GENERIC_STEP.test(s.name.trim()));
     if (generic) return `"${generic.name}" is not a real step name; use the function, branch or state the reply names`;
-    const bare = lane.steps.find((s) => !s.icon);
+    // A step the same in both lanes is drawn as a name in the "unchanged" row, never as a tile, so it needs no icon.
+    const other = p.lanes.length === 2 ? p.lanes.find((l) => l !== lane) : undefined;
+    const bare = lane.steps.find((s, i) => !s.icon && !(other && s.state === "ok" && other.steps[i]?.state === "ok" && other.steps[i]!.name === s.name));
     if (bare) return `"${bare.name}" needs an icon from the allowed list`;
     const long = lane.steps.find((s) => s.note.length > STEP_LIMIT.note || s.detail.length > STEP_LIMIT.detail);
     if (long) return long.note.length > STEP_LIMIT.note ? `the note on "${long.name}" is ${long.note.length} characters; at most ${STEP_LIMIT.note}. Write a short phrase, not a sentence` : `the detail on "${long.name}" is ${long.detail.length} characters; at most ${STEP_LIMIT.detail}`;
+    const longFix = lane.steps.find((s) => s.fix.length > STEP_LIMIT.fix);
+    if (longFix) return `the fix on "${longFix.name}" is ${longFix.fix.length} characters; at most ${STEP_LIMIT.fix}. Write a short phrase, not a sentence`;
     const noCause = lane.steps.find((s) => s.state === "broken" && !s.note);
     if (noCause) return `the broken step "${noCause.name}" needs a note with the cause`;
   }
@@ -64,4 +69,20 @@ export function gridProblem(p: GridPanel): string | null {
   const generic = p.cells.find((c) => GENERIC_STEP.test(c.name.trim()));
   if (generic) return `"${generic.name}" is not a real host or agent name`;
   return null;
+}
+
+/**
+ * Last resort after the model was already asked once to shorten: cut flow notes, details and fixes at a word boundary
+ * so a picture that is right except for a few characters ships instead of dropping to the fallback card.
+ */
+export function shortenFlowText<T extends { panels: unknown[] }>(spec: T): T {
+  for (const p of spec.panels as FlowPanel[]) {
+    if (p.kind !== "flow") continue;
+    for (const s of p.lanes.flatMap((l) => l.steps)) {
+      s.note = cleanWords(s.note, STEP_LIMIT.note);
+      s.fix = cleanWords(s.fix, STEP_LIMIT.fix);
+      s.detail = cleanWords(s.detail, STEP_LIMIT.detail);
+    }
+  }
+  return spec;
 }
