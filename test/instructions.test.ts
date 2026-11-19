@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { tailnetIpFromInterfaces } from "../src/baseurl.js";
-import { installAgentsBlock, installCursorRule, uninstallAgentsBlock, uninstallCursorRule } from "../src/install/instructions.js";
+import { installAgentsBlock, installCursorHook, installCursorRule, uninstallAgentsBlock, uninstallCursorHook, uninstallCursorRule } from "../src/install/instructions.js";
 import { InstallError } from "../src/install/shared.js";
 
 let dir: string;
@@ -67,5 +67,27 @@ describe("tailnet IP from interfaces", () => {
   it("picks an address in 100.64.0.0/10 only", () => {
     expect(tailnetIpFromInterfaces({ en0: [a("192.168.1.5")], utun4: [a("100.78.92.101")] })).toBe("100.78.92.101");
     expect(tailnetIpFromInterfaces({ en0: [a("100.200.1.1"), a("100.63.1.1"), a("fd7a::1", "IPv6")] })).toBeUndefined();
+  });
+});
+
+describe("Cursor sessionStart hook", () => {
+  it("merges beside other hooks, is idempotent and removes only its entry", () => {
+    const f = join(dir, "hooks.json");
+    const orig = { version: 1, hooks: { stop: [{ command: "orca" }], sessionStart: [{ command: "other" }] } };
+    writeFileSync(f, JSON.stringify(orig));
+    expect(installCursorHook(dir, "earshot").changed).toBe(true);
+    const doc = JSON.parse(readFileSync(f, "utf8"));
+    expect(doc.hooks.sessionStart).toHaveLength(2);
+    expect(doc.hooks.sessionStart[1].command).toBe("EARSHOT_HOOK=1 earshot cursor-session-start");
+    expect(installCursorHook(dir, "earshot").changed).toBe(false);
+    expect(uninstallCursorHook(dir).changed).toBe(true);
+    expect(JSON.parse(readFileSync(f, "utf8"))).toEqual(orig);
+  });
+
+  it("creates the file and refuses invalid JSON", () => {
+    installCursorHook(dir, "earshot");
+    expect(JSON.parse(readFileSync(join(dir, "hooks.json"), "utf8")).hooks.sessionStart).toHaveLength(1);
+    writeFileSync(join(dir, "hooks.json"), "{nope");
+    expect(() => installCursorHook(dir, "earshot")).toThrow(InstallError);
   });
 });
