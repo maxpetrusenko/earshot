@@ -1,0 +1,7 @@
+{
+  "name": "sit-watcher",
+  "out": "explain-sit-watcher",
+  "expect": "visual",
+  "situation": "bug",
+  "reply": "Nothing new was caught, but that doesn't tell us much: the watcher has been blind all day.\n\nSince 07:00 today every run has failed to read Studio, Slack and Gmail with \"no JS-capable Chrome window\". Each run still logs run ok with an empty claimable list, but that empty list is just what a failed read looks like, not \"no tickets\". New tickets and announcements since 07:00 could have been missed.\n\nIts blind alert came late. It fired once at 22:30, 15 hours after it went blind. Cause from that alert: Chrome Profile 1 on uniclaw has View, Developer, Allow JavaScript from Apple Events turned off. The fast ticker crashes on the same error every minute.\n\nWhat it did see today: only the research-report alerts for E43, from 16:07 to 18:18. Those come from local files, not Chrome.\n\nFix, one GUI toggle on uniclaw: in the Studio Chrome window, turn on View, Developer, Allow JavaScript from Apple Events. The alert also suggests restarting Chrome, but I'd skip that because it risks the Studio tab with V6.\n\nDo you want to flip it, or should I do it with cua-driver? It's one menu click in Chrome on uniclaw, nothing else. Once it's on I'll run the watcher once by hand, which reads Studio, Slack and Gmail and claims nothing, so you get a real answer on tickets and announcements.\n\nThe fact that it took 15 hours to alert is a separate bug worth fixing later."
+}

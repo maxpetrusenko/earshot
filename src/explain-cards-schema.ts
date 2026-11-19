@@ -32,21 +32,33 @@ export interface CardsPanel {
   caption: string;
   cards: Card[];
 }
-export const STEP_STATES = ["ok", "changed", "broken"] as const;
+/**
+ * ok: plain step. cause: the root cause (red, ROOT CAUSE). masked: a step that looks fine and hides the cause (amber, LOOKS FINE).
+ * changed: what is different now (accent). fixed: the step after the fix works (green).
+ */
+export const STEP_STATES = ["ok", "cause", "masked", "changed", "fixed"] as const;
 export type StepState = (typeof STEP_STATES)[number];
+/** Older and looser words a model may still use, mapped to the state they mean. */
+const STATE_ALIAS: Record<string, StepState> = { broken: "cause", root_cause: "cause", rootcause: "cause", symptom: "masked", looks_fine: "masked", fine: "ok" };
+const stepState = (v: unknown): StepState => {
+  const k = typeof v === "string" ? v.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
+  return (STEP_STATES as readonly string[]).includes(k) ? (k as StepState) : (STATE_ALIAS[k] ?? "ok");
+};
 /** Parsed lengths are generous on purpose: the gate (STEP_LIMIT in explain-flow.ts) rejects a long line so the model shortens it, instead of the parser cutting it mid-thought. */
-export const STEP_PARSE_MAX = { detail: 120, note: 160 };
+export const STEP_PARSE_MAX = { detail: 120, note: 160, link: 40 };
 
-/** One step of a flow. `changed` is outlined in the accent color; `broken` is red and carries the cause in `note`. */
+/** One step of a flow. The state says what the step is in the story: cause (red), masked (amber), changed (accent), fixed (green). */
 export interface FlowStep {
   name: string;
   detail: string;
   icon: Icon | "";
   state: StepState;
-  /** Broken: the cause. Changed: what is different now. */
+  /** Cause: why it fails. Masked: why it looks fine. Changed: what is different now. */
   note: string;
-  /** Broken step of a one-lane bug flow: what the fix did to this step, drawn on the step itself. */
+  /** Cause step of a one-lane bug flow: what the fix is, drawn as a green strip on the step itself. */
   fix: string;
+  /** Label on the arrow leaving this step ("every 5 min"), only when the reply gives one. */
+  link: string;
 }
 export interface FlowLane {
   /** BEFORE or AFTER on a two-lane flow; empty on a single lane. */
@@ -200,7 +212,7 @@ export function layersPanel(p: Record<string, unknown>): LayersPanel {
 
 const flowStep = (v: unknown): FlowStep => {
   const r = rec(v);
-  return { name: cleanWords(r.name, 28), detail: cleanWords(r.detail, STEP_PARSE_MAX.detail), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, STEP_STATES, "ok"), note: cleanWords(r.note, STEP_PARSE_MAX.note), fix: cleanWords(r.fix, STEP_PARSE_MAX.note) };
+  return { name: cleanWords(r.name, 28), detail: cleanWords(r.detail, STEP_PARSE_MAX.detail), icon: oneOf(r.icon, ICONS, "" as Icon), state: stepState(r.state), note: cleanWords(r.note, STEP_PARSE_MAX.note), fix: cleanWords(r.fix, STEP_PARSE_MAX.note), link: cleanWords(r.link, STEP_PARSE_MAX.link) };
 };
 
 export function flowPanel(p: Record<string, unknown>): FlowPanel {

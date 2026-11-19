@@ -99,4 +99,6 @@ Heavy work (renders, Playwright, scoring) runs on pro. Check `df -h ~` before an
 
 ## 7. Types the code accepts
 
-`log_compare`, `state_key`, `range_chart` (with `player: true` for wait-until-available), `architecture` (layered only, real names, an icon on every node, one flow direction), `ui_before_after`, `flow` (3 to 7 real steps, one direction, an icon each, the changed or broken step marked: changed is an accent outline, broken is red with the cause; before and after lanes share rows), `ranked`, `grid`. Code-level sequence diagrams and boxes joined by lines are rejected.
+`log_compare`, `state_key`, `range_chart` (with `player: true` for wait-until-available), `architecture` (layered only, real names, an icon on every node, one flow direction), `ui_before_after`, `flow` (3 to 7 real steps with short noun or verb phrase names, one direction, an icon each that never contradicts the state; step states: `cause` red ROOT CAUSE, `masked` amber LOOKS FINE for the step that hides it, `changed` accent, `fixed` green; a bug flow must mark the cause and show the fix as a green strip on it or a closing `fixed` step; an arrow label only when the reply gives a timing; before and after lanes share rows), `ranked`, `grid`. Code-level sequence diagrams and boxes joined by lines are rejected.
+
+Footer dot color comes from `footer_tone` (risk amber, bad red, good green, neutral gray). A time span is given as two clock times in `span`; code computes the duration and draws it once as a stat under the subhead.

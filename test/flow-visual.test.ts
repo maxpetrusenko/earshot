@@ -23,7 +23,7 @@ describe("flow type", () => {
   });
   it("bug: the broken step is red with its cause; flow: both lanes mark the changed step", () => {
     const bug = renderExplainHtml(spec(load("bug")));
-    expect(bug).toContain("fc s-broken");
+    expect(bug).toContain("fc s-cause");
     expect(bug).toContain("counter resets to zero on every rebuild");
     const flow = renderExplainHtml(spec(load("flow")));
     expect(flow.match(/fc s-changed/g)).toHaveLength(2);
@@ -33,9 +33,9 @@ describe("flow type", () => {
   it("rejects a flow with no marked step", () => {
     const o = clone(load("bug"));
     for (const s of lanes(o).steps!) delete s.state;
-    expect(explainGate(spec(o))).toMatch(/changed or broken step marked/);
+    expect(explainGate(spec(o))).toMatch(/changed step or the root cause marked/);
   });
-  it("rejects generic labels, a missing icon, a broken step with no cause, and the wrong step count", () => {
+  it("rejects generic labels, a missing icon, a root cause with no note, and the wrong step count", () => {
     const g = clone(load("bug"));
     lanes(g).steps![0]!.name = "Step 1";
     expect(explainGate(spec(g))).toMatch(/not a real step name/);
