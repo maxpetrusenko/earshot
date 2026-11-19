@@ -15,10 +15,12 @@ const small = (name: "alert" | "check"): string => icon(name).replace('width="26
 
 const TAG: Record<FlowStep["state"], string> = { ok: "", changed: "CHANGED", broken: "BROKEN" };
 
-function stepCard(s: FlowStep, wide: boolean): string {
-  const tag = TAG[s.state] ? `<p class="fs-tag">${TAG[s.state]}</p>` : "";
+function stepCard(s: FlowStep, wide: boolean, lane: "before" | "after" | "" = ""): string {
+  const word = lane === "before" && s.state === "changed" ? "REPLACED" : TAG[s.state];
+  const tag = word ? `<p class="fs-tag">${word}</p>` : "";
   const note = s.note && s.state !== "ok" ? `<p class="fs-note">${s.state === "broken" ? small("alert") : ""}<span>${e(s.note)}</span></p>` : "";
-  const text = `<div class="fs-tx">${tag}<p class="fs-nm">${e(s.name)}</p>${s.detail ? `<p class="fs-dt">${e(s.detail)}</p>` : ""}${note}</div>`;
+  const fix = s.fix && s.state === "broken" ? `<p class="fs-fix"><b>FIX</b><span>${e(s.fix)}</span></p>` : "";
+  const text = `<div class="fs-tx">${tag}<p class="fs-nm">${e(s.name)}</p>${s.detail ? `<p class="fs-dt">${e(s.detail)}</p>` : ""}${note}${fix}</div>`;
   return `<div class="fc s-${s.state}${wide ? " wide" : ""}"><span class="fs-tile">${icon(s.icon)}</span>${text}</div>`;
 }
 
@@ -29,18 +31,33 @@ function oneLane(l: FlowLane): string {
   return `<div class="fl one">${l.steps.map((s, i) => stepCard(s, true) + (i < l.steps.length - 1 ? cn : "")).join("")}</div>`;
 }
 
-/** Two lanes in one grid: BEFORE column, a narrow arrow column, AFTER column; each step is one shared row. */
+/** A run of steps that are the same in both lanes: one compact row with the count and the names, not a repeat of each card. */
+function unchangedRow(names: string[]): string {
+  return `<div class="un"><p class="un-n">${names.length} unchanged ${names.length === 1 ? "step" : "steps"}</p><p class="un-l">${e(names.join(", "))}</p></div>`;
+}
+
+/** Two lanes in one grid: BEFORE column, a narrow arrow column, AFTER column. Only the rows that differ are drawn side by side; runs of identical steps collapse into one row. */
 function twoLanes(a: FlowLane, b: FlowLane): string {
   const n = Math.min(a.steps.length, b.steps.length);
   const head = `<p class="fl-h">${e(a.label)}</p><span></span><p class="fl-h">${e(b.label)}</p>`;
-  const rows = Array.from({ length: n }, (_, i) => {
+  const blocks: string[] = [];
+  let run: string[] = [];
+  const flush = (): void => {
+    if (run.length) blocks.push(unchangedRow(run));
+    run = [];
+  };
+  for (let i = 0; i < n; i++) {
     const x = a.steps[i]!;
     const y = b.steps[i]!;
-    const differs = x.state !== y.state || x.name !== y.name;
-    const last = i === n - 1;
-    return `${stepCard(x, false)}<span class="fl-mid${differs ? " on" : ""}">${differs ? RIGHT : ""}</span>${stepCard(y, false)}${last ? "" : `${cn}<span></span>${cn}`}`;
-  }).join("");
-  return `<div class="fl two">${head}${rows}</div>`;
+    if (x.state === "ok" && y.state === "ok" && x.name === y.name) {
+      run.push(x.name);
+      continue;
+    }
+    flush();
+    blocks.push(`${stepCard(x, false, "before")}<span class="fl-mid on">${RIGHT}</span>${stepCard(y, false, "after")}`);
+  }
+  flush();
+  return `<div class="fl two">${head}${blocks.join(`${cn}<span></span>${cn}`)}</div>`;
 }
 
 export function flowBody(p: FlowPanel): string {
@@ -84,6 +101,11 @@ body.k-grid{--bg:#f1f4f6;--eye:#3b4a5e}
 .fc.s-broken{border-color:var(--bad);background:var(--badbg)}
 .fc.s-broken .fs-tile{background:#fff;color:var(--bad);box-shadow:0 0 0 2.5px var(--bad)}
 .fc.s-broken .fs-tag,.fc.s-broken .fs-note{color:var(--bad)}
+.fs-fix{display:flex;gap:8px;align-items:flex-start;margin:9px 0 0;padding-top:8px;border-top:2px dashed var(--good);font-size:14.5px;line-height:1.28;font-weight:700;color:var(--good)}
+.fs-fix b{flex:none;padding:1px 6px;border-radius:6px;background:var(--good);color:#fff;font-size:11.5px;letter-spacing:.08em}
+.un{grid-column:1/-1;margin:2px 0;padding:9px 12px;border:2px dashed var(--line);border-radius:14px;text-align:center}
+.un-n{margin:0;font-size:14px;font-weight:800;letter-spacing:.06em;color:var(--mute);text-transform:uppercase}
+.un-l{margin:2px 0 0;font-size:14px;line-height:1.25;color:var(--mute)}
 .cn{display:flex;justify-content:center;height:30px;padding:4px 0;color:#9fb0c8}
 .fl.one .cn{justify-content:flex-start;padding-left:32px}
 .fl.two{display:grid;grid-template-columns:minmax(0,1fr) 26px minmax(0,1fr);align-items:stretch}
@@ -96,7 +118,7 @@ body.k-grid{--bg:#f1f4f6;--eye:#3b4a5e}
 .rkl{padding:8px 14px}
 .rkl ol{list-style:none;margin:0;padding:0}
 .rk{display:flex;gap:14px;align-items:center;margin:8px 0;padding:12px 14px;border:2.5px solid transparent;border-radius:18px}
-.rk-n{flex:none;width:34px;text-align:center;font-size:36px;line-height:1;font-weight:800;color:#8d998f}
+.rk-n{flex:none;width:34px;text-align:center;font-size:36px;line-height:1;font-weight:800;color:#5f6d63}
 .rk-nm{margin:0;font-size:20px;line-height:1.15;font-weight:800;letter-spacing:-.01em}
 .rk-dt{margin:4px 0 0;font-size:15.5px;line-height:1.3;color:var(--mute)}
 .rk.rec{border-color:var(--good);background:var(--goodbg)}

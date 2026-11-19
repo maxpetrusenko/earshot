@@ -59,8 +59,28 @@ function journeyBody(p: JourneyPanel): string {
   return `<ol class="jy">${steps}</ol>`;
 }
 
+/** Most element rows one mockup shows. */
+export const UI_ROWS_MAX = 4;
+
+/**
+ * Cap the height: past four rows, the outlined or annotated elements stay, the plain ones fill what room is left in their
+ * own order, and the rest collapse into one "n more, unchanged" row, so a table with many columns shows only what matters.
+ */
+export function visibleElements(els: UiEl[]): { shown: UiEl[]; hidden: number } {
+  if (els.length <= UI_ROWS_MAX) return { shown: els, hidden: 0 };
+  const keep = new Set<number>();
+  els.forEach((el, i) => {
+    if (el.hl || el.note) keep.add(i);
+  });
+  els.forEach((_, i) => {
+    if (keep.size < UI_ROWS_MAX) keep.add(i);
+  });
+  return { shown: els.filter((_, i) => keep.has(i)), hidden: els.length - keep.size };
+}
+
 function uiBody(p: UiPanel): string {
-  const els = p.elements.map(element).join("");
+  const { shown, hidden } = visibleElements(p.elements);
+  const els = shown.map(element).join("") + (hidden ? `<div class="ew"><div class="el row s-muted more">${hidden} more${shown.some((x) => x.hl) ? ", unchanged" : ""}</div></div>` : "");
   const top = p.frame === "mac" ? `<div class="tb"><i></i><i></i><i></i><span>${e(p.title)}</span></div>` : p.frame === "phone" ? `<div class="nt"></div>` : p.title ? `<div class="tb"><span>${e(p.title)}</span></div>` : "";
   return `<div class="fr ${p.frame}">${top}<div class="fb">${els}</div></div>`;
 }

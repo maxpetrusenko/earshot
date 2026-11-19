@@ -21,7 +21,8 @@ body{margin:0;font-family:${SANS};font-size:16px;line-height:1.35;color:${FG}}
 h1{font-family:${SERIF};font-size:26px;line-height:1.12;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}
 .tk{margin:0 0 12px;font-size:17px;color:${MUTED}}
 .ey{margin:0 0 8px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${ACC}}
-.ft{margin:12px 0 0;font-size:16px;font-weight:600;color:${FG}}
+.ft{position:relative;margin:14px 0 0;padding:0 0 0 20px;font-size:16px;line-height:1.35;font-weight:700;color:${FG}}
+.ft:before{content:"";position:absolute;left:0;top:.5em;width:0;height:0;border:5px solid #0d6648;border-radius:50%}
 .ps{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
 .pn{display:flex;flex-direction:column;background:${CARD};border:1px solid ${LINE};border-top:5px solid ${MUTED};border-radius:12px;padding:12px 12px 14px;box-shadow:0 8px 20px -12px rgba(27,27,24,.35)}
 .pn.a{border-top-color:${ACC}}

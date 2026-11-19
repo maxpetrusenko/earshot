@@ -29,8 +29,8 @@ h1{margin:0 0 8px;font-size:32px;line-height:1.08;font-weight:800;letter-spacing
 .mk.dash i{flex:1;height:3px;border-radius:2px;background:#6a756f}
 .mk.wave i{flex:1;min-width:2px;border-radius:2px;background:var(--good)}
 .t-good .st{color:var(--ink)}
-.ft{display:flex;align-items:center;gap:9px;margin:16px 0 0;font-size:17px;font-weight:700}
-.ft i{flex:none;width:11px;height:11px;border-radius:50%;background:var(--good)}
+.ft{display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;font-size:17px;font-weight:700}
+.ft i{flex:none;margin-top:.4em;width:11px;height:11px;border-radius:50%;background:var(--good)}
 .k-state_key .ft{font-weight:500;color:var(--mute);font-size:16px}
 .k-state_key .ft i{display:none}
 .rg{padding:14px 16px 12px}
@@ -71,6 +71,7 @@ h1{margin:0 0 8px;font-size:32px;line-height:1.08;font-weight:800;letter-spacing
 .ni.n1{grid-template-columns:1fr}.ni.n2{grid-template-columns:repeat(2,1fr)}.ni.n3{grid-template-columns:repeat(3,1fr)}.ni.n4{grid-template-columns:repeat(2,1fr)}
 .nd{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
 .nd .ic{color:#2c5fae;margin-bottom:3px}
+.ni .nn{font-size:16px}
 .nn{margin:0;font-size:18px;font-weight:800;line-height:1.15;overflow-wrap:anywhere}
 .nd .nx{margin:0;font-size:13.5px}
 .ar{display:flex;align-items:center;justify-content:center;gap:9px;margin:6px 0;color:#2c5fae;font-size:15.5px;font-weight:600}
