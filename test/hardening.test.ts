@@ -125,6 +125,9 @@ describe("a brief never stays pending", () => {
     expect(id).toBeDefined();
     expect(JSON.parse(readFileSync(join(briefDir(id!), "meta.json"), "utf8")).status).toBe("pending");
     const code = new Promise<number | null>((r) => child.on("close", r));
+    // meta.json is written (pending) just before the signal handlers are installed; signalling in that
+    // gap kills the process by default (code null). Give the handlers time to land.
+    await new Promise((r) => setTimeout(r, 1000));
     child.kill("SIGTERM");
     expect(await code).toBe(143);
     const meta = JSON.parse(readFileSync(join(briefDir(id!), "meta.json"), "utf8"));

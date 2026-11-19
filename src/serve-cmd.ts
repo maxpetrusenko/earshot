@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import { parseTailscaleStatus, runTailscale } from "./baseurl.js";
+import { runTailscale, tailscaleInfo } from "./baseurl.js";
 import type { Config } from "./config.js";
 import { createEarshotServer } from "./serve.js";
 import { sweepDead } from "./sweep.js";
@@ -59,7 +59,7 @@ export async function startServe(cfg: Config, over: ServeOverrides, log: (l: str
   const mode = cfg.serve.mode;
   let host = over.host ?? "127.0.0.1";
   if (mode === "tailnet-ip" && !over.host) {
-    const ip = parseTailscaleStatus(await runTailscale(["status", "--json"])).ip4;
+    const ip = (await tailscaleInfo()).ip4;
     if (!ip) throw new Error("serve.mode tailnet-ip needs a Tailscale IPv4 address; is tailscale up?");
     host = ip;
   }

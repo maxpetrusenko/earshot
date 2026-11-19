@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { earshotHome, type ServeConfig } from "./config.js";
 
@@ -50,8 +51,30 @@ export function parseTailscaleStatus(json: string): TailscaleInfo {
   };
 }
 
+/** First IPv4 in the Tailscale range 100.64.0.0/10 on a local interface. */
+export function tailnetIpFromInterfaces(ifaces: Record<string, { address: string; family: string | number }[] | undefined> = networkInterfaces()): string | undefined {
+  for (const list of Object.values(ifaces)) {
+    for (const a of list ?? []) {
+      const m = (a.family === "IPv4" || a.family === 4) && /^100\.(\d+)\.\d+\.\d+$/.exec(a.address);
+      if (m && Number(m[1]) >= 64 && Number(m[1]) <= 127) return a.address;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Ask the Tailscale CLI. The macOS system-extension build cannot be reached from a CLI run over ssh
+ * ("Failed to connect to local Tailscale daemon"); then the tailnet IPv4 is read from the interfaces so
+ * `serve.mode: tailnet-ip` still works. The DNS name is unknown in that case.
+ */
 export async function tailscaleInfo(): Promise<TailscaleInfo> {
-  return parseTailscaleStatus(await runTailscale(["status", "--json"]));
+  try {
+    return parseTailscaleStatus(await runTailscale(["status", "--json"]));
+  } catch (e) {
+    const ip4 = tailnetIpFromInterfaces();
+    if (ip4) return { ip4 };
+    throw e;
+  }
 }
 
 /** Resolve the base URL for a config, querying Tailscale only when the mode needs it. */
