@@ -158,5 +158,36 @@ class Args(unittest.TestCase):
         self.assertIn("--detach", plugin._explain_args(None))
 
 
+class UserPrompt(unittest.TestCase):
+    def test_pre_llm_call_records_the_message_and_returns_none(self):
+        plugin._LAST_USER.clear()
+        self.assertIsNone(plugin.remember_user_message(session_id="s 1", user_message="draw me a diagram", platform="cli"))
+        self.assertEqual(plugin._LAST_USER["s 1"], "draw me a diagram")
+
+    def test_session_key_is_safe(self):
+        self.assertEqual(plugin._session_key("a b/c"), "hermes-a_b_c")
+        self.assertEqual(plugin._session_key(""), "")
+
+    def test_run_gets_prompt_env_and_session(self):
+        plugin._LAST_USER["sess9"] = "make a chart"
+        seen = {}
+
+        def fake_run(cmd, **kw):
+            seen["cmd"], seen["env"] = cmd, kw["env"]
+
+            class Done:
+                returncode = 0
+                stdout = "[Listen](https://h.ts.net/b/AbCd1234Ef/edited.mp3) · [Original](https://h.ts.net/b/AbCd1234Ef/original.mp3)\n"
+                stderr = ""
+
+            return Done()
+
+        with mock.patch.object(plugin, "_earshot_bin", lambda: "/bin/earshot"), mock.patch.object(plugin, "_session_env", lambda: {"platform": "cli", "chat_type": "", "chat_id": ""}), mock.patch.object(plugin, "_plugin_config", lambda: {}), mock.patch.object(plugin.subprocess, "run", fake_run):
+            out = plugin.transform_llm_output("x" * 200, session_id="sess9", platform="cli")
+        self.assertIn("[Listen](", out)
+        self.assertEqual(seen["env"]["EARSHOT_USER_PROMPT"], "make a chart")
+        self.assertEqual(seen["cmd"][-2:], ["--session", "hermes-sess9"])
+
+
 if __name__ == "__main__":
     unittest.main()

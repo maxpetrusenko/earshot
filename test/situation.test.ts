@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AUTO_VISUAL_MIN_CHARS, classifyReply, findPageUrl, shouldAutoVisual, type Situation } from "../src/situation.js";
+import { classifyReply, findPageUrl, type Situation } from "../src/situation.js";
+import { decideVisual } from "../src/trigger.js";
 
 const dir = join(import.meta.dirname, "fixtures/explain");
 interface Fx {
@@ -33,12 +34,12 @@ describe("situation classifier: one fixture per situation", () => {
     });
   }
   it("every long fixture that carries a label is classified as labelled", () => {
-    for (const f of fixtures.filter((x) => x.situation && x.reply.length >= AUTO_VISUAL_MIN_CHARS - 100)) expect(classifyReply(f.reply).situation, f.name).toBe(f.situation);
+    for (const f of fixtures.filter((x) => x.situation && x.reply.length >= 500)) expect(classifyReply(f.reply).situation, f.name).toBe(f.situation);
   });
   it("post routes to post media, not to the explain stage", () => {
     const c = classifyReply(get("sit-post").reply);
     expect(c.route).toBe("post-media");
-    expect(shouldAutoVisual(get("sit-post").reply, c)).toBe(false);
+    expect(decideVisual({ reply: get("sit-post").reply, autoOn: true }).visual).toBe(false);
   });
 });
 
@@ -54,17 +55,12 @@ describe("situation classifier: none", () => {
   for (const [label, text] of none) {
     it(label, () => {
       expect(classifyReply(text).situation).toBe("none");
-      expect(shouldAutoVisual(text)).toBe(false);
+      expect(decideVisual({ reply: text, autoOn: true }).visual).toBe(false);
     });
   }
 });
 
-describe("automatic visual", () => {
-  it("needs a situation and about 600 characters", () => {
-    const bug = get("sit-bug").reply;
-    expect(shouldAutoVisual(bug)).toBe(true);
-    expect(shouldAutoVisual(bug.slice(0, 400))).toBe(false);
-  });
+describe("situation hint and page lookup", () => {
   it("finds the page a reply names", () => {
     expect(findPageUrl("Open http://localhost:3000/invoices to see it.")).toBe("http://localhost:3000/invoices");
     expect(findPageUrl("It runs on localhost:5173.")).toBe("http://localhost:5173");

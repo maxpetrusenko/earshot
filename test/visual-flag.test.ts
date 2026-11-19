@@ -108,9 +108,8 @@ describe("earshot run --visual", () => {
     expect(readdirSync(r.scratch).filter((f) => f.includes("-explain"))).toEqual([]);
   }, 60000);
 
-  it("automatic: a long bug reply gets the Explain line with no flag; a long status reply and a short reply do not", async () => {
-    const bug = readFileSync(join(import.meta.dirname, "fixtures/explain/sit-bug.json"), "utf8");
-    const reply = (JSON.parse(bug) as { reply: string }).reply;
+  it("automatic: a long reply with a named root cause and fix gets the Explain line with no flag; a long status reply and a short reply do not", async () => {
+    const reply = `Retries now stop at five, the retry bug is fixed.\n\n**Root cause:** the counter reset on every 5xx, so a failing job retried forever.\n\n**Fix:** the counter keeps its value and the job moves to the dead letter queue after five tries.\n\n${"The retry handler logs each attempt with the job id and the status code it saw. ".repeat(14)}`;
     const auto = await run([], { explain: EXPLAIN_SPEC, reply, port: 17798 });
     expect(auto.lines).toHaveLength(3);
     expect(auto.lines[1]).toMatch(/-explain\.html" title="Explain"/);
@@ -119,7 +118,7 @@ describe("earshot run --visual", () => {
     expect(status.lines).toHaveLength(2);
     const short = await run([], { explain: EXPLAIN_SPEC, reply: "Fixed the root cause of the retry bug.", port: 17800 });
     expect(short.lines).toHaveLength(2);
-    const forcedOff = await run(["--no-visual"], { explain: EXPLAIN_SPEC, reply, port: 17801 });
+    const forcedOff = await run(["--no-visual"], { explain: EXPLAIN_SPEC, reply, port: 17804 });
     expect(forcedOff.lines).toHaveLength(2);
   }, 90000);
 
@@ -127,4 +126,19 @@ describe("earshot run --visual", () => {
     const r = await run(["--visual", "--no-explain"], { explain: EXPLAIN_SPEC, port: 17796 });
     expect(r.lines).toHaveLength(2);
   }, 60000);
+
+  it("the user's message decides: an ask via --prompt-file prints the Explain line, no ask prints none", async () => {
+    const pf = join(home, "asked.txt");
+    writeFileSync(pf, "can you draw me a diagram of the retry logic");
+    const asked = await run(["--prompt-file", pf], { explain: EXPLAIN_SPEC, port: 17811 });
+    expect(asked.lines).toHaveLength(3);
+    expect(asked.lines[1]).toContain("-explain.html");
+    const plain = join(home, "plain.txt");
+    writeFileSync(plain, "fix the retry counter");
+    const none = await run(["--prompt-file", plain], { explain: EXPLAIN_SPEC, port: 17812 });
+    expect(none.lines).toHaveLength(2);
+    const off = await run(["--prompt-file", pf, "--no-visual"], { explain: EXPLAIN_SPEC, port: 17813 });
+    expect(off.lines).toHaveLength(2);
+  }, 90000);
+
 });

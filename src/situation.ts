@@ -1,15 +1,12 @@
 /**
- * Situation classifier: decides, with no LLM call, whether a reply is worth a picture and what kind. A deterministic
- * score over the reply's length and structure (headings, bullets, code, numbers with units) and its vocabulary.
- * The Explain line is automatic when the situation is not `none` and the reply is long enough, and the situation
- * goes to the explain model as a hint about which visual type to draw.
+ * Situation classifier: picks, with no LLM call, what kind of picture a reply would carry. A deterministic score over
+ * the reply's structure (headings, bullets, code, numbers with units) and its vocabulary. This loose classifier only
+ * names the situation (the hint that goes to the explain model, and the pick when the user asked for a picture).
+ * Whether a picture is made at all is decided in `trigger.ts`: asked, or strong specific evidence.
  */
 
 export const SITUATIONS = ["plan", "architecture", "post", "logic", "bug", "perf", "ui", "schema", "options", "hosts", "none"] as const;
 export type Situation = (typeof SITUATIONS)[number];
-
-/** A reply shorter than this gets no automatic picture. */
-export const AUTO_VISUAL_MIN_CHARS = 600;
 
 export interface Classification {
   situation: Situation;
@@ -83,9 +80,6 @@ export function classifyReply(reply: string): Classification {
   if (base < THRESHOLD) return none;
   return { situation: best, score: Math.round((base + structure(t)) * 10) / 10, route: "explain" };
 }
-
-/** The Explain line prints by itself: a situation worth a picture and a reply long enough to carry one. */
-export const shouldAutoVisual = (reply: string, c: Classification = classifyReply(reply)): boolean => c.route === "explain" && reply.length >= AUTO_VISUAL_MIN_CHARS;
 
 /** First page the reply names: an http(s) URL, or a localhost:port mention. Null when none. */
 export function findPageUrl(reply: string): string | null {
