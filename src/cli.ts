@@ -369,7 +369,7 @@ program
 program
   .command("install <agent>")
   .description("install into an agent: claude-code (skill, Stop hook or Play button mod), codex (notify program or AGENTS.md instructions), cursor (user sessionStart hook, or a project rule), opencode, gemini, droid (global instruction file), mcp (MCP server config)")
-  .option("--mode <mode>", "claude-code: skill, hook or mod (Play button buttons inside Claude Code); codex: notify (default) or instructions (AGENTS.md block that makes Codex print the links)")
+  .option("--mode <mode>", "claude-code: skill, hook or mod (Play button buttons inside Claude Code); codex: notify (default) or instructions (AGENTS.md block that makes Codex print the links)", "skill")
   .option("--scope <scope>", "claude-code: user (~/.claude) or project (./.claude); cursor: user (hook, default) or project (./.cursor/rules); mcp with claude-code: local, project or user")
   .option("--client <client>", "mcp: claude-code, codex or generic")
   .option("--write", "mcp with codex: merge the table into config.toml instead of printing it")
