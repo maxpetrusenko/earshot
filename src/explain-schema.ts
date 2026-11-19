@@ -270,7 +270,7 @@ export function parseExplain(raw: unknown): ExplainSpec | null {
     metrics,
     assumptions: arr(o.assumptions).slice(0, MAX.assumptions).map((c) => cleanText(c, 120)).filter(Boolean),
     eyebrow: cleanText(o.eyebrow, 48),
-    footer: cleanWords(o.footer, 80),
+    footer: cleanWords(o.footer, 240),
     illustrative: o.illustrative === true,
   };
 }

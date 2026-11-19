@@ -67,7 +67,7 @@ export async function buildExplain(llm: LlmProvider, reply: string, opts: { situ
           const specs = mergeRangeCharts(parseExplainAll(extractJson(raw)));
           if (specs.length === 0) return none(retries, "no_image");
           // Each concept is gated alone. Passing ones ship; if some fail on the first try the model is asked once to fix the set.
-          const bads = specs.map((sp) => explainGate(sp));
+          const bads = specs.map((sp) => explainGate(sp, undefined, reply));
           const good = specs.filter((_, i) => !bads[i]);
           const firstBad = bads.find(Boolean);
           if (good.length > best.length) best = good;

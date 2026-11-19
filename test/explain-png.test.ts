@@ -3,6 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { explainPng } from "../src/explain-png.js";
+import { browserAvailable } from "./browser.js";
+
+const hasBrowser = await browserAvailable();
 
 const dims = (f: string): { w: number; h: number } => {
   const b = readFileSync(f);
@@ -11,7 +14,7 @@ const dims = (f: string): { w: number; h: number } => {
 const page = (blocks: number): string => `<!doctype html><body style="margin:0;background:#f3f4ef"><main style="padding:24px">${Array.from({ length: blocks }, () => `<div style="height:100px;margin:0 0 12px;background:#fff"></div>`).join("")}</main></body>`;
 
 describe("explain PNG", () => {
-  it("is at least 1080 px wide at 2x and its height follows the content, not a fixed canvas", async () => {
+  it.skipIf(!hasBrowser)("is at least 1080 px wide at 2x and its height follows the content, not a fixed canvas", async () => {
     const d = mkdtempSync(join(tmpdir(), "earshot-png-"));
     try {
       const short = await explainPng(page(2), join(d, "s.png"));

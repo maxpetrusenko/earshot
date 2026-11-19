@@ -34,6 +34,9 @@ export interface CardsPanel {
 }
 export const STEP_STATES = ["ok", "changed", "broken"] as const;
 export type StepState = (typeof STEP_STATES)[number];
+/** Parsed lengths are generous on purpose: the gate (STEP_LIMIT in explain-flow.ts) rejects a long line so the model shortens it, instead of the parser cutting it mid-thought. */
+export const STEP_PARSE_MAX = { detail: 120, note: 160 };
+
 /** One step of a flow. `changed` is outlined in the accent color; `broken` is red and carries the cause in `note`. */
 export interface FlowStep {
   name: string;
@@ -195,7 +198,7 @@ export function layersPanel(p: Record<string, unknown>): LayersPanel {
 
 const flowStep = (v: unknown): FlowStep => {
   const r = rec(v);
-  return { name: cleanWords(r.name, 28), detail: cleanWords(r.detail, 34), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, STEP_STATES, "ok"), note: cleanWords(r.note, 64) };
+  return { name: cleanWords(r.name, 28), detail: cleanWords(r.detail, STEP_PARSE_MAX.detail), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, STEP_STATES, "ok"), note: cleanWords(r.note, STEP_PARSE_MAX.note) };
 };
 
 export function flowPanel(p: Record<string, unknown>): FlowPanel {

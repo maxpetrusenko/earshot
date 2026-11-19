@@ -15,6 +15,9 @@ const marked = (steps: FlowStep[]): FlowStep[] => steps.filter((s) => s.state !=
  * required: a flow with nothing marked is only a chain of boxes. A broken step carries its cause. Two lanes share
  * positions, so they must have the same number of steps and each lane must mark where it differs.
  */
+/** What the picture has room for; matches the prompt (detail 30, note 64). */
+export const STEP_LIMIT = { detail: 34, note: 64 };
+
 export function flowProblem(p: FlowPanel): string | null {
   if (p.lanes.length > 2) return "a flow has one lane or two (before and after)";
   for (const lane of p.lanes) {
@@ -23,6 +26,8 @@ export function flowProblem(p: FlowPanel): string | null {
     if (generic) return `"${generic.name}" is not a real step name; use the function, branch or state the reply names`;
     const bare = lane.steps.find((s) => !s.icon);
     if (bare) return `"${bare.name}" needs an icon from the allowed list`;
+    const long = lane.steps.find((s) => s.note.length > STEP_LIMIT.note || s.detail.length > STEP_LIMIT.detail);
+    if (long) return long.note.length > STEP_LIMIT.note ? `the note on "${long.name}" is ${long.note.length} characters; at most ${STEP_LIMIT.note}. Write a short phrase, not a sentence` : `the detail on "${long.name}" is ${long.detail.length} characters; at most ${STEP_LIMIT.detail}`;
     const noCause = lane.steps.find((s) => s.state === "broken" && !s.note);
     if (noCause) return `the broken step "${noCause.name}" needs a note with the cause`;
   }

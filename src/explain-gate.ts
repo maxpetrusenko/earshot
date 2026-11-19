@@ -41,6 +41,8 @@ function labels(p: Panel): string[] {
 }
 
 /** Share of the picture taken by drawn things (mockups, bars, arrows, highlights) rather than text. Below this the image is dropped. */
+/** Longest footer line the picture has room for. */
+export const FOOTER_MAX = 120;
 export const MIN_DENSITY = 0.55;
 
 const EL_AREA: Record<string, number> = { bar: 2, controls: 2.2, button: 1.5, link: 1.2, bubble: 1.6, row: 1.1, wave: 2.6, text: 0 };
@@ -98,8 +100,9 @@ function panelProblem(p: Panel, i: number): string | null {
   switch (p.kind) {
     case "ui":
       if (p.elements.length < 2) return `${n} has fewer than two elements; draw the actual interface`;
+      if (p.elements.filter((e) => e.hl).length > 3) return `${n} outlines more than three elements; outline only the one to three that changed, so the eye has one place to go`;
       if (p.elements.every((e) => e.kind === "text")) return `${n} is only text labels; use bar, controls, button, link, bubble, wave or row elements`;
-      if (p.elements.filter((e) => e.kind !== "text").length < 3) return `${n} is too sparse; draw at least three real interface elements`;
+      if (p.elements.filter((e) => e.kind !== "text").length < 3) return `${n} is too sparse; use at least three non-text elements (button, link, controls, row, bubble, bar) for things the reply names, such as a button or link it quotes, or a state it describes; if the reply names fewer, return a flow of the user's steps or no_image, never invented interface`;
       return null;
     case "timeline":
       if (p.lanes.reduce((a, l) => a + l.segments.length, 0) < 2) return `${n} has fewer than two segments; give each lane segments with start and duration`;
@@ -120,13 +123,48 @@ function panelProblem(p: Panel, i: number): string | null {
   }
 }
 
+const STOP = new Set(["the", "and", "for", "with", "this", "that", "its", "are", "was", "now", "not", "but", "you", "from", "into", "when"]);
+const stem = (w: string): string => w.replace(/(?:ing|ed|es|s)$/, "");
+const tokens = (t: string): string[] => (t.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((w) => w.length >= 3 && !STOP.has(w)).map(stem);
+
+/** Most invented elements one ui_before_after panel may carry. Zero highlighted. */
+export const MAX_INVENTED_UI = 1;
+
+/** True when at least three quarters of an element's own words appear in the reply. An element with no words of its own (a bare wave) is invented. */
+export function elementGrounded(text: string, replyTokens: Set<string>): boolean {
+  const own = tokens(text);
+  if (own.length === 0) return false;
+  return own.filter((w) => replyTokens.has(w)).length / own.length >= 0.75;
+}
+
+/**
+ * ui_before_after must show only elements the reply names: with no live page to screenshot the model otherwise fills the
+ * mockup with plausible chrome. At most MAX_INVENTED_UI per panel, none outlined; the feedback sends it to a flow or no_image.
+ */
+export function uiGroundingProblem(spec: ExplainSpec, reply: string): string | null {
+  if (spec.type !== "ui_before_after") return null;
+  const known = new Set(tokens(reply));
+  for (const [i, p] of spec.panels.entries()) {
+    if (p.kind !== "ui") continue;
+    const invented = p.elements.filter((e) => !elementGrounded(e.text, known));
+    const n = `panel ${i + 1}`;
+    const lit = invented.find((e) => e.hl);
+    if (lit) return `${n} outlines "${lit.text}", which the reply never names; outline only what the reply names`;
+    if (invented.length > MAX_INVENTED_UI) return `${n} shows elements the reply never names (${invented.map((e) => `"${e.text}"`).join(", ")}); draw only what the reply names, or return a flow of the user's steps, or no_image`;
+    if (p.elements.length - invented.length < 3) return `${n} has fewer than three elements the reply names; the reply does not name enough interface to draw it: return a flow of the user's steps (before and after lanes) or no_image`;
+  }
+  return null;
+}
+
 /**
  * Quality gate before rendering: would someone understand the change from the picture alone?
  * Returns feedback for the model, or null when the spec passes.
  */
-export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY): string | null {
+export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY, reply?: string): string | null {
   const noDirector = directorProblem(spec);
   if (noDirector) return noDirector;
+  // The parser keeps a long footer whole so it is never cut mid-sentence; the model is asked to shorten it instead.
+  if (spec.footer.length > FOOTER_MAX) return `the footer is ${spec.footer.length} characters; at most ${FOOTER_MAX}. Keep the numbers, drop the rest`;
   if (isCardPanel(spec.panels[0])) {
     // Reference style: cards, a range axis or layers. No density measure; the rules are about content, not area.
     const p = spec.panels[0]!;
@@ -153,6 +191,8 @@ export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY)
   if (spec.type === "sequence") return "a sequence diagram shows how the code works, not what changed for the person; draw what they see instead (a log_compare, state_key or range_chart), or return no_image";
   if (spec.type === "architecture") return "an architecture drawn as boxes and lines shows how the code works, not what changed; it is allowed only as layers (name, detail, icon, link, items): real component names, an icon on each, one flow direction, or return no_image";
   if (spec.type === "log_compare" || spec.type === "state_key" || spec.type === "range_chart" || spec.type === "flow" || spec.type === "ranked" || spec.type === "grid") return `${spec.type} needs its own panel shape (cards, rows)`;
+  const ungrounded = reply === undefined ? null : uiGroundingProblem(spec, reply);
+  if (ungrounded) return ungrounded;
   const d = visualDensity(spec);
   if (d < minDensity) return `the picture is mostly text (visual density ${(Math.floor(d * 1000) / 1000).toFixed(3)}, needs ${minDensity.toFixed(3)}); draw more mockup elements, arrows, highlights or timeline bars and fewer sentences, or return no_image`;
   return null;

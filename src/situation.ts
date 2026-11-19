@@ -26,7 +26,7 @@ export const SITUATION_HINT: Record<Exclude<Situation, "post" | "none">, string>
   logic: "logic change: draw a flow with before and after lanes sharing step positions; mark the changed branch in both lanes. One visual only.",
   bug: "bug or incident: draw a flow with the failing step marked broken and its cause in the note; the footer states the fix with the measured before and after from the reply. One visual only.",
   perf: "performance result: draw a range_chart from the reply's own numbers, or a log_compare when it is one wrong-looking value.",
-  ui: "UI change: draw ui_before_after with real interface elements; outline what changed.",
+  ui: "UI change: draw ui_before_after using only interface elements the reply names (its labels, states and controls); outline what changed. Add no chrome the reply does not mention. If the reply names fewer than three elements per panel, draw a flow of the user's steps instead, or no_image.",
   schema: "data or schema change: draw ui_before_after with plain frames, one row element per column (table name as the frame title), the changed column highlighted, before then after; the footer carries the row counts and the rollback fact from the reply. One visual only.",
   options: "options comparison: draw ranked options, best first, the recommendation first and marked.",
   hosts: "multi-host or agent status: draw a grid with one cell per host or agent, its state and one line of what it is doing that keeps the reply's own numbers (percent, counts, times). Do not drop a host.",

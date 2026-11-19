@@ -110,9 +110,9 @@ export function renderExplainHtml(spec: ExplainSpec): string {
 <style>
 ${EXPLAIN_CSS}
 </style></head><body><main class="ex">
-<h1>${e(spec.title)}</h1>${spec.takeaway ? `<p class="tk">${e(spec.takeaway)}</p>` : ""}
+${spec.eyebrow ? `<p class="ey">${e(spec.eyebrow)}</p>` : ""}<h1>${e(spec.title)}</h1>${spec.takeaway ? `<p class="tk">${e(spec.takeaway)}</p>` : ""}
 <section class="ps${two ? " two" : ""}">${panels}</section>
-${metrics}${callouts}
+${metrics}${callouts}${spec.footer ? `<p class="ft">${e(spec.footer)}</p>` : ""}
 </main></body></html>
 `;
 }
