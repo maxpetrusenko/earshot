@@ -1,0 +1,55 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<style>
+@font-face{font-family:"Source Sans 3";font-weight:400;src:url(../fonts/source-sans-3-latin-400-normal.woff2)}
+@font-face{font-family:"Source Sans 3";font-weight:600;src:url(../fonts/source-sans-3-latin-600-normal.woff2)}
+@font-face{font-family:Newsreader;font-weight:500;src:url(../fonts/newsreader-latin-500-normal.woff2)}
+*{box-sizing:border-box}
+:root{--ink:#14201d;--mute:#4a574f;--line:#cfd6cf;--green:#0d6648;--blue:#1b4f9f}
+body{margin:0;width:1280px;height:640px;overflow:hidden;font-family:"Source Sans 3",sans-serif;color:var(--ink);background:radial-gradient(900px 500px at 85% 10%,#fff 0,rgba(255,255,255,0) 70%),linear-gradient(135deg,#f3f5ef,#e9efe8)}
+.t{position:absolute;left:64px;top:44px}
+.t b{display:block;font:500 54px/1 Newsreader,serif;letter-spacing:-.02em}
+.t span{display:block;margin-top:10px;font-size:22px;color:var(--mute);width:400px;line-height:1.3}
+.reply{position:absolute;left:64px;top:300px;width:360px;height:300px;background:#fff;border:1.5px solid var(--line);border-radius:20px;padding:18px 22px;box-shadow:0 14px 36px rgba(20,32,29,.08)}
+.reply h4{margin:0 0 12px;font-size:13px;letter-spacing:.08em;color:var(--mute)}
+.reply p{margin:0 0 9px;font-size:16px;line-height:1.36;color:#27332f}
+.reply p em{font-style:normal;font-weight:600;color:#9b3524}
+.fade{position:absolute;left:0;right:0;bottom:0;height:90px;border-radius:0 0 20px 20px;background:linear-gradient(rgba(255,255,255,0),#fff)}
+.arrow{position:absolute;left:446px;top:300px}
+.out{position:absolute;left:528px;top:40px;width:688px}
+.row{display:flex;gap:14px;margin:0 0 14px}
+.pl{flex:1;display:flex;align-items:center;gap:14px;height:64px;padding:0 18px;background:#fff;border:1.5px solid var(--line);border-radius:20px;box-shadow:0 10px 28px rgba(20,32,29,.07)}
+.pl .p{flex:none;width:38px;height:38px;border-radius:50%;background:var(--green);display:grid;place-items:center}
+.pl .p i{margin-left:4px;border-left:13px solid #fff;border-top:8px solid transparent;border-bottom:8px solid transparent}
+.pl .l{font-size:18px;font-weight:600;line-height:1.1}.pl .l small{display:block;margin-top:2px;font-weight:400;font-size:13px;color:var(--mute)}
+.wv{flex:1;display:flex;align-items:center;gap:3px;height:32px}.wv i{flex:1;border-radius:2px;background:var(--green);opacity:.85}
+.pl.o .p{background:#4a574f}.pl.o .wv i{background:#6a756f}
+.card{position:relative;display:flex;gap:26px;background:#fff;border:1.5px solid var(--line);border-radius:24px;padding:18px;box-shadow:0 18px 44px rgba(20,32,29,.1);height:476px;overflow:hidden}
+.shot{flex:none;width:198px;height:438px;border-radius:14px;overflow:hidden;border:1.5px solid var(--line);background:#f4f6f1}
+.shot img{display:block;width:195px;height:auto}
+.side{flex:1;padding-top:6px}
+.side h3{margin:0 0 6px;font:500 34px/1.08 Newsreader,serif;letter-spacing:-.01em}
+.side p{margin:0 0 20px;font-size:19px;line-height:1.35;color:var(--mute)}
+.chip{display:flex;gap:12px;align-items:center;margin:0 0 14px;font-size:18px;font-weight:600}
+.chip s{flex:none;width:14px;height:14px;border-radius:50%;background:var(--green)}.chip s.r{background:#b3361f}.chip s.b{background:var(--blue)}
+.auto{position:absolute;right:24px;bottom:22px;font-size:15px;font-weight:600;letter-spacing:.08em;color:var(--green)}
+</style></head><body>
+<div class="t"><b>earshot</b><span>Hear what your agent did. See the one picture that matters.</span></div>
+<div class="reply"><h4>AGENT REPLY</h4>
+<p><strong>Root cause found.</strong> The retry counter lived on the request object, and the queue rebuilt it on every 5xx, so it <em>went back to zero</em> each time.</p>
+<p>The counter now lives on the job record. The worker stops after five attempts and marks the job dead.</p>
+<p>Verified: 40+ retries before, exactly 5 now.</p><div class="fade"></div></div>
+<svg class="arrow" width="64" height="40" viewBox="0 0 64 40" fill="none" stroke="#0d6648" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h50M40 6l16 14-16 14"/></svg>
+<div class="out">
+<div class="row">
+<div class="pl"><span class="p"><i></i></span><div class="l">Listen<small>28 s summary</small></div><div class="wv" id="w1"></div></div>
+<div class="pl o"><span class="p"><i></i></span><div class="l">Original<small>36 s, read aloud</small></div><div class="wv" id="w2"></div></div>
+</div>
+<div class="card"><div class="shot"><img src="../auto-bug.png"></div>
+<div class="side"><h3>Explain image, on by default.</h3><p>A strict flow: the broken step is red, the cause is written under it.</p>
+<div class="chip"><s></s>Send webhook</div><div class="chip"><s class="r"></s>Rebuild request: counter resets</div><div class="chip"><s class="b"></s>Fix: counter on the job record</div>
+<div class="auto">DRAWN AUTOMATICALLY</div></div></div>
+</div>
+<script>
+const H=[30,55,40,75,35,90,50,68,30,82,45,60,28,72,38,58,26,78,44,64,32,70,40,54];
+for(const id of["w1","w2"])document.getElementById(id).innerHTML=H.slice(0,id==="w1"?14:14).map(h=>`<i style="height:${h}%"></i>`).join("")
+</script></body></html>

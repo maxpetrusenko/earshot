@@ -202,7 +202,7 @@ export function pageTitle(html: string): string | null {
   return text || null;
 }
 
-/** A pending page keeps asking for itself for this long, then gives up (the worker died or Orca does not re-read files). */
+/** Opt-in only (`reload: true`). Orca renders a page from the text it read into an iframe srcdoc, so a reload re-renders the same text and never re-reads the file; see docs/orca.md. A pending page keeps asking for itself for this long, then gives up (the worker died or Orca does not re-read files). */
 export const PENDING_RELOAD_MS = 120_000;
 
 /**
@@ -212,7 +212,7 @@ export const PENDING_RELOAD_MS = 120_000;
  */
 export function renderPendingHtml(kind: OrcaKind, o: { note?: string; reload?: boolean; madeAt?: number; visible?: boolean } = {}): string {
   const madeAt = o.madeAt ?? Date.now();
-  const reload = o.reload !== false ? `<script>(function(){if(Date.now()-${madeAt}<${PENDING_RELOAD_MS})setTimeout(function(){location.reload()},1500)})();</script>` : "";
+  const reload = o.reload === true ? `<script>(function(){if(Date.now()-${madeAt}<${PENDING_RELOAD_MS})setTimeout(function(){location.reload()},1500)})();</script>` : "";
   // `--visual` prints the Explain line before any picture exists, so its stand-in is a visible note, not a collapsed frame.
   if (kind !== "player" && o.visible) {
     const note = o.note ?? "Drawing the picture.";

@@ -1,0 +1,7 @@
+{
+  "name": "sit-plan",
+  "out": "explain-sit-plan",
+  "expect": "visual",
+  "situation": "plan",
+  "reply": "## Plan: move invoice exports to the job queue\n\nHere is the plan for review before I touch code. Scope is the export endpoint only; billing, auth and the invoice list stay as they are.\n\n1. Add an export_jobs table and a worker that builds the CSV off the request thread.\n2. Change POST /exports to enqueue a job and return its id at once instead of streaming the file.\n3. Add GET /exports/:id that returns the status and, when done, a signed download link.\n4. Update the invoice page to poll that status and show a Download button when it is ready.\n5. Delete the old streaming path after one release.\n\nStep 2 is the risky one: any client that expects the file in the response breaks, and two internal scripts do. I need your call on whether to keep a flag for them during the first release. Estimated effort is about two days, and nothing ships until you approve."
+}

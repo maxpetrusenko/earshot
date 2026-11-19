@@ -1,0 +1,7 @@
+{
+  "name": "sit-hosts",
+  "out": "explain-sit-hosts",
+  "expect": "visual",
+  "situation": "hosts",
+  "reply": "Fleet status at 14:20.\n\npro: idle, 42 percent memory, swap guard clear. Two local worker sessions finished and no builds are running.\nmaxiclaw: busy, 71 percent load. The nightly CI sender is mid-run, Hermes cron is on schedule, and the agents queue holds 3 jobs.\nuniclaw: online, running the Johto lane worker; the last heartbeat was 40 seconds ago. Paused jobs: none.\nvps-builder: online, the self-hosted runner is idle and waiting for the next push.\nvps-prod: online, all containers healthy; the last deploy was yesterday.\n\nNothing needs action right now. The only thing to watch is maxiclaw, which will stay busy until the CI sender finishes in about 40 minutes."
+}

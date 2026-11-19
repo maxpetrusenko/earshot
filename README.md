@@ -2,6 +2,8 @@
 
 Turn a coding agent's finished work into a voice memo and a one-glance diagram, and get back one chat line with two tappable words that start playing the moment you tap them: Listen for the edited memo and Original for your agent's own words.
 
+<p align="center"><img src="assets/hero.png" srcset="assets/hero.png 1x, assets/hero@2x.png 2x" alt="A reply goes in; Listen and Original audio plus an automatic explainer image come out" width="800"></p>
+
 <p align="center"><img src="assets/brand/hero-card.png" alt="The earshot card on a phone: title, player, a top-down four-box diagram and the transcript" width="360"></p>
 
 ## Why
@@ -60,6 +62,14 @@ echo "Fixed the flaky webhook retries. The counter reset on every 5xx, so a dead
 
 Tap either word (or open the URL). Audio starts while the memo is still being made: the original in about 1.5 seconds, the edited memo in about 4. Both links are one MP3 that keeps growing until the track is complete, then it becomes a normal seekable file. The card with the diagram and transcript is at `/b/<id>`; `--format plain` prints the old two lines (`Listen: <url>` and `Original: <url>`), and `--format json` prints `{listen, listen_original, card, id}`.
 
+## Automatic visuals
+
+On by default. Before anything is printed, a classifier with no model call reads the reply's length, structure and vocabulary and picks a situation: plan review, architecture change, post (routed to post media), logic change, bug or incident, perf result, UI change, data or schema change, options comparison, multi-host status, or none (status updates, test results, short answers, drafts). When the situation is not none and the reply is 600 characters or longer, the Explain picture line prints by itself and the worker draws it, with a deterministic card as the floor so it is never empty. Agents do not decide; `visuals.auto: false` turns it off, `--no-visual` forces it off for one reply and `--visual` forces it on.
+
+| Bug or incident: a flow, the failing step red | Perf result: values on one axis | Architecture: layers, the moved piece outlined |
+|---|---|---|
+| <img src="assets/auto-bug.png" width="260"> | <img src="assets/auto-perf.png" width="260"> | <img src="assets/auto-architecture.png" width="260"> |
+
 ## Examples
 
 [`examples/`](examples/README.md) runs one reply through the whole pipeline: the two audio tracks, the edited script with the reasoning behind it, and two explainer pages with the data that drew them.
@@ -70,7 +80,7 @@ Tap either word (or open the URL). Audio starts while the memo is still being ma
 |---|---|---|
 | Claude Code, skill | `earshot install claude-code` | Claude ends its reply with one line: Listen · Original |
 | Claude Code, hook | `earshot install claude-code --mode hook` | Stop hook message in the terminal UI |
-| Orca chat (default in Orca) | `earshot run --format auto` | returns in under a second; an inline Web Audio player on Orca desktop (one row: play or pause, a Listen / Original toggle, elapsed and total time; blank on iOS) and the Listen · Original links last, all filled in by a background worker. Add `--visual` for multi-step, UI, perf or architecture replies: the Explain line prints at once and the worker fills in the model's image, or a "what changed" card when the model draws nothing. See [Orca](docs/orca.md) |
+| Orca chat (default in Orca) | `earshot run --format auto` | returns in under a second; an inline Web Audio player on Orca desktop (one row: play or pause, a Listen / Original toggle, elapsed and total time; blank on iOS) and the Listen · Original links last, all filled in by a background worker. The Explain picture is automatic (see Automatic visuals); `--visual` and `--no-visual` force it. See [Orca](docs/orca.md) |
 | Codex, instructions | `earshot install codex --mode instructions` | an `AGENTS.md` block makes Codex end its reply with the links |
 | Codex, notify | `earshot install codex` | `notify` program, link in `~/.earshot/logs/hook.log` |
 | Cursor (IDE and `cursor-agent`) | `earshot install cursor` | a `sessionStart` hook adds the instruction; the agent ends its reply with the links. See [Cursor](docs/cursor.md) |

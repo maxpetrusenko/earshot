@@ -32,3 +32,37 @@ Result: not approved. Two of eight images reach 8 (architecture-rec, orca-player
 - bugfix: the open bracket fades to the axis end; the judge reads the fade as an invented end.
 
 Rounds 1 and 2 were scored on renders from earlier template versions; round 3 is the final template and prompt.
+
+## Automatic visuals round (2026-11-18)
+
+Nine situation fixtures at 390 px, Sonnet drafts (two rounds), then one Opus final. Post routes to post media and has no explain image. Draft 1 mean 6.5 (the plan image truncated step names, the host grid dropped numbers); fixes: whole-word step names, host lines keep the reply's numbers, one visual per reply, a last odd grid cell spans both columns.
+
+| Situation | Type | Draft 1 | Draft 2 | Opus final |
+|---|---|---|---|---|
+| architecture | layers | 7 | 7 | 8 |
+| perf | range_chart | 7 | scorer error | 8 |
+| bug | flow | 7 | 4 | 5 |
+| hosts | grid | 6 | 7 | 7 |
+| logic | flow, two lanes | 8 | 8 | 7 |
+| options | ranked | 8 | 7 | 7 |
+| plan | flow | 4 | 8 | 7 |
+| schema | ui_before_after | 6 | 6 | scorer error |
+| ui | ui_before_after | 7 | scorer error | 4 |
+
+## Follow-up round (2026-11-18, after the CI fix)
+
+Nine situation fixtures at 390 px. Two Sonnet draft rounds, then Opus final (`explain-score.ts --final`, parallel). Changes in this round: the UI mockup shows only elements the reply names (gate: at most one invented element per panel, none outlined, at least three named; otherwise a flow or no image), the mockup page now prints its eyebrow and footer, flow notes and footers are sent back to the model when too long instead of cut mid-sentence, at most three outlined elements, prompt `visual-explainer-format.v8`.
+
+| Situation | Type | Draft 1 | Draft 2 | Opus final |
+|---|---|---|---|---|
+| architecture | layers | 7 | 7 | 7 |
+| perf | range_chart | 7 | 7 | 8 |
+| bug | flow | 7 | 7 | 7 |
+| hosts | grid | 8 | 7 | 7 |
+| logic | flow, two lanes | 5 | 8 | 6 |
+| options | ranked | 7 | 7 | 7 |
+| plan | flow | 7 | no image (note 66 chars, gate) | no image (same) |
+| schema | ui_before_after | 5 | 6 | 6 |
+| ui | ui_before_after, then flow | 6 | no image (too sparse) | 6 (flow) |
+
+Not approved: one of eight scored images reaches 8 (perf). Remaining complaints: both columns of a two-lane flow repeat the unchanged steps (tall image), the schema mockup is tall with many outlined columns, the bug image shows the fix only in the footer. Opus scored the bug image 5 before the footer fix and 7 now. The earlier Opus schema error did not recur; the scorer now retries and names the cause.

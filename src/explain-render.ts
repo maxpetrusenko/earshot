@@ -95,7 +95,7 @@ function metric(m: Metric): string {
 /** The explain page body and styles as one self-contained document. */
 export function renderExplainHtml(spec: ExplainSpec): string {
   const first = spec.panels[0];
-  if (first && (first.kind === "cards" || first.kind === "range" || first.kind === "layers")) return renderCardsHtml(spec, first);
+  if (first && (first.kind === "cards" || first.kind === "range" || first.kind === "layers" || first.kind === "flow" || first.kind === "ranked" || first.kind === "grid")) return renderCardsHtml(spec, first);
   const tmax = timelineMax(spec.panels.filter((p): p is TimelinePanel => p.kind === "timeline"));
   const two = spec.panels.length > 1;
   const panels = spec.panels
@@ -110,9 +110,9 @@ export function renderExplainHtml(spec: ExplainSpec): string {
 <style>
 ${EXPLAIN_CSS}
 </style></head><body><main class="ex">
-<h1>${e(spec.title)}</h1>${spec.takeaway ? `<p class="tk">${e(spec.takeaway)}</p>` : ""}
+${spec.eyebrow ? `<p class="ey">${e(spec.eyebrow)}</p>` : ""}<h1>${e(spec.title)}</h1>${spec.takeaway ? `<p class="tk">${e(spec.takeaway)}</p>` : ""}
 <section class="ps${two ? " two" : ""}">${panels}</section>
-${metrics}${callouts}
+${metrics}${callouts}${spec.footer ? `<p class="ft">${e(spec.footer)}</p>` : ""}
 </main></body></html>
 `;
 }

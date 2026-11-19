@@ -11,6 +11,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { AREAS, strictJson, validRubric } from "./explain-score-lib.js";
 
 const args = process.argv.slice(2);
 const json = args.includes("--json");
@@ -55,7 +56,6 @@ interface Scores {
   notes: string;
 }
 
-const AREAS = ["realism", "legibility", "density", "journey", "metrics", "how", "clarity", "style"] as const;
 
 /** Reference images that set the style bar: the reply each one explains sits next to it in examples/references/README.md. */
 const REFS = join(import.meta.dirname, "..", "examples", "references");
@@ -99,10 +99,12 @@ Question: from the composition alone, can the viewer point at what changed, or a
 Return only this JSON object, no prose:
 {"pass":true,"points_to":"what the eye lands on first","why":"one sentence"}`;
 
+const CALL_TIMEOUT_MS = 5 * 60_000;
+const ATTEMPTS = 3;
 const running = new Set<ChildProcess>();
 process.on("exit", () => running.forEach((c) => c.kill("SIGTERM")));
 
-function claude(args: string[], prompt: string): Promise<{ code: number; out: string; err: string }> {
+function claude(args: string[], prompt: string): Promise<{ code: number; out: string; err: string; timedOut: boolean }> {
   const env = { ...process.env };
   for (const k of ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"]) delete env[k];
   env.PATH = `/opt/homebrew/bin:${join(homedir(), ".local", "bin")}:${env.PATH ?? ""}`;
@@ -111,34 +113,52 @@ function claude(args: string[], prompt: string): Promise<{ code: number; out: st
     running.add(child);
     let out = "";
     let err = "";
-    const timer = setTimeout(() => child.kill("SIGTERM"), 15 * 60_000);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, CALL_TIMEOUT_MS);
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (err += d));
     child.on("error", (e) => {
       running.delete(child);
       clearTimeout(timer);
-      res({ code: 127, out: "", err: e.message });
+      res({ code: 127, out: "", err: e.message, timedOut: false });
     });
     child.on("close", (code) => {
       running.delete(child);
       clearTimeout(timer);
-      res({ code: code ?? 1, out, err });
+      res({ code: code ?? 1, out, err, timedOut });
     });
   });
 }
 
-const firstJson = (raw: string): Record<string, unknown> | null => {
-  const start = raw.indexOf("{");
-  const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    return JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-};
-
 const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : NaN);
+
+/** Claude Code prints settings warnings to stderr on every run; they are not the answer. */
+const clean = (t: string): string => t.split("\n").filter((l) => !/^Permission allow rule|^Unknown env config|^\s*$/.test(l)).join("\n");
+const RATE = /rate.?limit|\b429\b|\b529\b|overloaded|try again|temporarily unavailable|ECONNRESET|socket hang up/i;
+
+/**
+ * One scorer call that ends in a valid JSON object or a Fatal. Up to ATTEMPTS tries; each failure is named so a run says why
+ * a score is missing: quota (fatal at once), rate limit (backoff), timeout, empty output, or a parse/validation failure
+ * (retried with the reminder to return only the object). Nothing returns zeros: an answer that does not validate is a failure.
+ */
+async function askJson(label: string, model: string, prompt: string, valid: (o: Record<string, unknown>) => boolean): Promise<Record<string, unknown>> {
+  let last = "";
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    const reminder = attempt > 1 && /^parse|^invalid/.test(last) ? "\n\nYour previous answer was not valid. Return exactly one JSON object and nothing else: no prose, no code fence, integer scores from 1 to 10." : "";
+    const r = await claude(["-p", "--model", model], prompt + reminder);
+    const text = clean(`${r.out}\n${r.err}`);
+    if (QUOTA.test(text)) throw new Fatal(`claude login not usable (${(text.split("\n").find((l) => QUOTA.test(l)) ?? "").trim().slice(0, 160)})`, 2);
+    const o = strictJson(clean(r.out));
+    if (o && valid(o)) return o;
+    last = r.timedOut ? `timeout after ${CALL_TIMEOUT_MS / 1000}s` : RATE.test(text) && !o ? `rate limit: ${text.trim().slice(0, 100)}` : !clean(r.out).trim() ? `empty output (exit ${r.code}): ${clean(r.err).trim().slice(0, 100)}` : o ? `invalid scores: ${JSON.stringify(o).slice(0, 120)}` : `parse failure: ${clean(r.out).trim().slice(0, 120)}`;
+    process.stderr.write(`  ${label} attempt ${attempt}/${ATTEMPTS} failed (${last})\n`);
+    if (attempt < ATTEMPTS) await new Promise((res) => setTimeout(res, (RATE.test(last) ? 20_000 : 3_000) * attempt));
+  }
+  throw new Fatal(`no valid answer from ${model} for ${label} after ${ATTEMPTS} attempts (last: ${last})`, 1);
+}
 
 /** A missing quota or a bad answer ends the run with this exit code. */
 class Fatal extends Error {
@@ -154,27 +174,21 @@ const QUOTA = /weekly limit|not logged in|invalid api key|Please run \/login/i;
 const empty = (file: string, notes: string): Scores => ({ file, realism: 0, legibility: 0, density: 0, journey: 0, metrics: 0, how: 0, clarity: 0, style: 0, overall: 0, notes });
 
 const twoFail: string[] = [];
+const scorerErrors: string[] = [];
 
 /** Two-second test first, as a hard gate, then the rubric. One image, so images can run side by side. */
 async function scoreOne(file: string): Promise<Scores> {
   const bare = file.replace(/\.png$/, "-bare.png");
   if (existsSync(bare)) {
     const side = file.replace(/\.png$/, ".input.txt");
-    const t = await claude(["-p", "--model", twoSecModel], TWO_SECOND(bare, existsSync(side) ? readFileSync(side, "utf8").trim() : ""));
-    const tj = firstJson(t.out);
-    if (!tj || typeof tj.pass !== "boolean") throw new Fatal(`no two-second verdict for ${file} (exit ${t.code}): ${(t.out + t.err).trim().slice(0, 200)}`, QUOTA.test(t.out + t.err) ? 2 : 1);
+    const tj = await askJson(`2s test ${file.split("/").pop()}`, twoSecModel, TWO_SECOND(bare, existsSync(side) ? readFileSync(side, "utf8").trim() : ""), (o) => typeof o.pass === "boolean");
     process.stderr.write(`  2s test ${tj.pass ? "PASS" : "FAIL"} ${file.split("/").pop()}: ${String(tj.points_to ?? "")} | ${String(tj.why ?? "")}\n`);
     if (!tj.pass) {
       twoFail.push(file);
       return empty(file, `FAILED two-second test: ${String(tj.why ?? "")}`.slice(0, 200));
     }
   }
-  const r = await claude(["-p", "--model", rubricModel], PROMPT(file));
-  // Claude Code prints settings warnings to stderr on every run; they are not the answer.
-  const text = `${r.out}\n${r.err}`.split("\n").filter((l) => !/^Permission allow rule|^Unknown env config|^\s*$/.test(l)).join("\n");
-  if (QUOTA.test(text)) throw new Fatal(`claude login not usable (${(text.split("\n").find((l) => QUOTA.test(l)) ?? "").trim().slice(0, 160)})`, 2);
-  const o = firstJson(r.out);
-  if (!o || Number.isNaN(n(o.overall))) throw new Fatal(`no scores from ${rubricModel} for ${file} (exit ${r.code}): ${(r.out + r.err).trim().slice(0, 200)}`, 1);
+  const o = await askJson(file.split("/").pop()!, rubricModel, PROMPT(file), validRubric);
   const row: Scores = { file, realism: n(o.realism), legibility: n(o.legibility), density: n(o.density), journey: n(o.journey), metrics: n(o.metrics), how: n(o.how), clarity: n(o.clarity), style: n(o.style), overall: n(o.overall), notes: typeof o.notes === "string" ? o.notes : "" };
   if (!json) process.stderr.write(`  overall ${row.overall}/10 ${file.split("/").pop()}  ${row.notes}\n`);
   return row;
@@ -189,7 +203,15 @@ try {
     Array.from({ length: Math.min(jobs, images.length) }, async () => {
       while (next < images.length) {
         const i = next++;
-        scores[i] = await scoreOne(images[i]!);
+        try {
+          scores[i] = await scoreOne(images[i]!);
+        } catch (e) {
+          // A quota problem ends the run; one image that never produced a valid answer does not take the others down.
+          if (!(e instanceof Fatal) || e.code === 2) throw e;
+          scorerErrors.push(images[i]!);
+          process.stderr.write(`  SCORER ERROR ${images[i]!.split("/").pop()}: ${e.message}\n`);
+          scores[i] = empty(images[i]!, `SCORER ERROR: ${e.message}`.slice(0, 200));
+        }
       }
     }),
   );
@@ -210,6 +232,6 @@ if (json) {
   console.log(["mean", ...AREAS.map((k) => mean(k).toFixed(1)), mean("overall").toFixed(1)].join("\t"));
 }
 
-if (twoFail.length) process.exitCode = 1;
+if (twoFail.length || scorerErrors.length) process.exitCode = 1;
 const worst = Math.min(...scores.map((s) => s.overall));
 if (min > 0 && worst < min) process.exit(1);

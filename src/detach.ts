@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import type { Config } from "./config.js";
 import { earshotHome } from "./config.js";
 import { recordWorker } from "./bundle.js";
-import { writeOrcaPlaceholders } from "./orca-output.js";
 import { prepareBrief, type Prepared } from "./prepare.js";
 
 export const logsDir = () => join(earshotHome(), "logs");
@@ -30,8 +29,8 @@ export interface Detached {
  */
 export function startDetached(cfg: Config, raw: string, o: { from: string; session?: string; title?: string; evidence?: string; configPath?: string; orca?: { dir: string; explain: boolean; png: boolean; visual?: boolean }; log?: (l: string) => void }): Detached {
   const prepared = prepareBrief(cfg, raw, o);
-  // The stand-in pages exist before the worker starts, so a fast worker can never be overwritten by them.
-  if (o.orca) writeOrcaPlaceholders(o.orca.dir, prepared.meta.id, o.orca.visual === true);
+  // No stand-in pages: Orca never re-reads a visual file that changes after it first rendered, but it retries a file that
+  // does not exist yet (1.5, 4 and 10 s later). The worker writes each page once it is real, or at the read window's end.
   mkdirSync(logsDir(), { recursive: true, mode: 0o700 });
   const log = join(logsDir(), `${prepared.meta.id}.log`);
   const fd = openSync(log, "a", 0o600);

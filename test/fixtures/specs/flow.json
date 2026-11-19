@@ -1,0 +1,32 @@
+{
+  "director": {
+    "intent": "The viewer believes a 429 now waits and retries instead of dropping the job.",
+    "key_frame": "Two lanes of the same five steps; only the branch after the rate-limit response is outlined, with the retry loop beside it.",
+    "first_look": "The blue outlined Backoff and retry step in the AFTER lane.",
+    "two_second_test": "With the text hidden the viewer can still point at the one outlined step in each lane and the arrow between them.",
+    "motion": "No. A static comparison stays a still."
+  },
+  "eyebrow": "SYNCD / LOGIC CHANGE",
+  "title": "Rate limits now retry, not drop.",
+  "takeaway": "A 429 from the API used to end the job. It now waits and tries again.",
+  "type": "flow",
+  "footer": "Only the response branch changed; intake and delivery are untouched.",
+  "panels": [
+    {
+      "before": [
+        { "name": "Receive job", "detail": "queue pop", "icon": "send" },
+        { "name": "Call billing API", "detail": "POST /invoices", "icon": "cloud" },
+        { "name": "Handle 429", "detail": "job marked failed", "icon": "branch", "state": "changed", "note": "drops the job" },
+        { "name": "Write result", "detail": "job record", "icon": "database" },
+        { "name": "Notify owner", "detail": "email on failure", "icon": "chat" }
+      ],
+      "after": [
+        { "name": "Receive job", "detail": "queue pop", "icon": "send" },
+        { "name": "Call billing API", "detail": "POST /invoices", "icon": "cloud" },
+        { "name": "Backoff and retry", "detail": "wait, then call again", "icon": "retry", "state": "changed", "note": "up to 5 tries" },
+        { "name": "Write result", "detail": "job record", "icon": "database" },
+        { "name": "Notify owner", "detail": "email on failure", "icon": "chat" }
+      ]
+    }
+  ]
+}

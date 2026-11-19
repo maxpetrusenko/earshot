@@ -1,0 +1,7 @@
+{
+  "name": "sit-schema",
+  "out": "explain-sit-schema",
+  "expect": "visual",
+  "situation": "schema",
+  "reply": "Schema migration for customer contact data, ready to apply on dev first.\n\nThe customers table currently stores contact details in two columns, email and phone, and a free text column called notes that has been used for second emails. The migration adds a contacts table with columns id, customer_id, kind, value and is_primary, with a foreign key to customers and an index on customer_id. A backfill copies each email and phone into a contacts row and marks them primary. The old email and phone columns stay for one release and are dropped in a later migration.\n\nRow counts: 18,400 customers become about 31,000 contacts. The migration takes about 40 seconds on the dev copy. Rollback drops the new table; the old columns are untouched, so nothing is lost if we stop."
+}

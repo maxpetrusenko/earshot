@@ -10,7 +10,7 @@ export type Tone = (typeof TONES)[number];
 export const MARKS = ["none", "dashed", "wave"] as const;
 export type Mark = (typeof MARKS)[number];
 /** Icons the renderer can draw. A layer or component without one of these is rejected by the gate. */
-export const ICONS = ["agents", "cursor", "keyboard", "eye", "desktop", "server", "database", "cloud", "terminal", "gear", "network", "file", "user", "lock", "bolt", "chat"] as const;
+export const ICONS = ["agents", "cursor", "keyboard", "eye", "desktop", "server", "database", "cloud", "terminal", "gear", "network", "file", "user", "lock", "bolt", "chat", "branch", "retry", "check", "alert", "clock", "send", "code", "table"] as const;
 export type Icon = (typeof ICONS)[number];
 
 export interface Card {
@@ -32,6 +32,61 @@ export interface CardsPanel {
   caption: string;
   cards: Card[];
 }
+export const STEP_STATES = ["ok", "changed", "broken"] as const;
+export type StepState = (typeof STEP_STATES)[number];
+/** Parsed lengths are generous on purpose: the gate (STEP_LIMIT in explain-flow.ts) rejects a long line so the model shortens it, instead of the parser cutting it mid-thought. */
+export const STEP_PARSE_MAX = { detail: 120, note: 160 };
+
+/** One step of a flow. `changed` is outlined in the accent color; `broken` is red and carries the cause in `note`. */
+export interface FlowStep {
+  name: string;
+  detail: string;
+  icon: Icon | "";
+  state: StepState;
+  /** Broken: the cause. Changed: what is different now. */
+  note: string;
+}
+export interface FlowLane {
+  /** BEFORE or AFTER on a two-lane flow; empty on a single lane. */
+  label: string;
+  steps: FlowStep[];
+}
+/** One or two lanes. Two lanes share step positions: the same row is the same place in the logic. */
+export interface FlowPanel {
+  kind: "flow";
+  label: string;
+  caption: string;
+  lanes: FlowLane[];
+}
+export interface RankedItem {
+  name: string;
+  detail: string;
+  recommended: boolean;
+}
+/** Options in rank order, best first, one of them recommended. */
+export interface RankedPanel {
+  kind: "ranked";
+  label: string;
+  caption: string;
+  items: RankedItem[];
+}
+export const CELL_STATES = ["ok", "warn", "bad", "idle"] as const;
+export type CellState = (typeof CELL_STATES)[number];
+export interface GridCell {
+  name: string;
+  icon: Icon | "";
+  state: CellState;
+  /** What the host or agent is doing, in the reply's words. */
+  line: string;
+}
+/** Hosts or agents side by side. */
+export interface GridPanel {
+  kind: "grid";
+  label: string;
+  caption: string;
+  cells: GridCell[];
+}
+
 export interface RangeRow {
   label: string;
   from: number;
@@ -139,4 +194,32 @@ export function layersPanel(p: Record<string, unknown>): LayersPanel {
     layers.push({ ...base, link: cleanWords(r.link, 40), core: r.core === true, items });
   }
   return { kind: "layers", label: "", caption: "", layers };
+}
+
+const flowStep = (v: unknown): FlowStep => {
+  const r = rec(v);
+  return { name: cleanWords(r.name, 28), detail: cleanWords(r.detail, STEP_PARSE_MAX.detail), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, STEP_STATES, "ok"), note: cleanWords(r.note, STEP_PARSE_MAX.note) };
+};
+
+export function flowPanel(p: Record<string, unknown>): FlowPanel {
+  const steps = (v: unknown): FlowStep[] => arr(v).slice(0, 12).map(flowStep).filter((s) => s.name);
+  const two = Array.isArray(p.before) && Array.isArray(p.after);
+  const lanes: FlowLane[] = two ? [{ label: "BEFORE", steps: steps(p.before) }, { label: "AFTER", steps: steps(p.after) }] : [{ label: "", steps: steps(p.steps) }];
+  return { kind: "flow", label: "", caption: "", lanes };
+}
+
+export function rankedPanel(p: Record<string, unknown>): RankedPanel {
+  const items: RankedItem[] = arr(p.items).slice(0, 5).map((v) => {
+    const r = rec(v);
+    return { name: cleanText(r.name, 30), detail: cleanWords(r.detail, 70), recommended: r.recommended === true };
+  }).filter((i) => i.name);
+  return { kind: "ranked", label: "", caption: "", items };
+}
+
+export function gridPanel(p: Record<string, unknown>): GridPanel {
+  const cells: GridCell[] = arr(p.cells).slice(0, 6).map((v) => {
+    const r = rec(v);
+    return { name: cleanText(r.name, 20), icon: oneOf(r.icon, ICONS, "" as Icon), state: oneOf(r.state, CELL_STATES, "ok"), line: cleanWords(r.line, 64) };
+  }).filter((c) => c.name);
+  return { kind: "grid", label: "", caption: "", cells };
 }

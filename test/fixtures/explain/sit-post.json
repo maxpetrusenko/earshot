@@ -1,0 +1,7 @@
+{
+  "name": "sit-post",
+  "out": "explain-sit-post",
+  "expect": "no_image",
+  "situation": "post",
+  "reply": "Draft X post for the earshot release, with two angles to pick from.\n\nAngle 1: \"I stopped reading my agent's replies. I listen to them now. Earshot turns every reply into a 30 second memo and a link I can tap from my phone.\" Image idea: the player bar with the waveform and the Listen button.\n\nAngle 2: \"Your coding agent explains what it did in 600 words. You skim it. Earshot reads it to you and draws the one picture that matters.\" Image idea: a before and after of a log line.\n\nBoth are under 280 characters, fact first, nothing to sell. The caption for the screenshot would be the plain sentence: Reply in, memo and picture out. Tell me which angle to use and I will queue the tweet with the media."
+}
