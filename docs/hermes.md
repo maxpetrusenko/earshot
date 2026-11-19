@@ -6,7 +6,7 @@ Hermes replies get the same last line as Claude Code replies: `[Listen](...) · 
 
 ## Design
 
-A Hermes plugin registers `transform_llm_output`. Hermes fires it once per turn on the finished reply, before delivery on every surface (CLI, TUI, Telegram, Matrix, WhatsApp, cron) and before the reply is stored. The plugin pipes the reply to `earshot run --detach --format text --no-explain`, which prints the two links in about 0.4 seconds and finishes the memo in a background worker, then returns the reply with the line appended. Streaming is unchanged (no `hold_stream`), so the user sees the reply as it arrives and the line comes with the final text.
+A Hermes plugin registers `transform_llm_output`. Hermes fires it once per turn on the finished reply, before delivery on every surface (CLI, TUI, Telegram, Matrix, WhatsApp, cron) and before the reply is stored. The plugin pipes the reply to `earshot run --detach --format text` (explain stays on; earshot's own visuals config decides whether there is a picture), which prints the two links in about 0.4 seconds and finishes the memo in a background worker, then returns the reply with the line appended. Streaming is unchanged (no `hold_stream`), so the user sees the reply as it arrives and the line comes with the final text.
 
 Chosen over alternatives:
 
@@ -44,6 +44,28 @@ One format for all three: it needs no per-platform upload code, it costs one det
 - Any failure (no `earshot` binary, run error, no link in the output, 6 second timeout): the reply goes out unchanged.
 
 `EARSHOT_BIN` overrides the binary; otherwise `earshot` on PATH, then `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`.
+
+## Explain image as a follow-up photo
+
+When the turn is a one-to-one Telegram or Matrix chat listed in `earshot.photo_channels` and the reply is at least 500 characters, the plugin runs `earshot run --format auto --orca-dir <tmp> --explain-png` instead (still prints the link at once; the worker renders the explain page to a PNG). It then starts a detached deliverer (the plugin file run as a script) that waits for the PNG and sends it with Hermes's own sender, `hermes send --to <platform>:<chat id> "MEDIA:<png>"`: a photo on Telegram, an m.image on Matrix. Credentials come from Hermes config, never from the plugin or a shell argument. The hook returns before any of this, so the text reply is not delayed; the deliverer survives the hook and the one-shot CLI.
+
+Config (`~/.hermes/config.yaml`, optional):
+
+```yaml
+earshot:
+  photo_channels: [telegram:dm, matrix:dm]   # default; or telegram:<chat id>, matrix:<room id>; [] turns photos off
+  photo_max: 1                               # images per reply, 1 to 3
+  photo_caption: ""
+  photos: true
+```
+
+`<platform>:dm` means the one-to-one chats in Hermes's channel directory (`~/.hermes/channel_directory.json`) for that platform, so no id is stored in the repo. Group chats, cron, WhatsApp and CLI never get photos, even if an id is listed.
+
+No picture, no photo: earshot writes an explain page only when the model drew one, and the deterministic fallback card (`--visual`) is not requested. On Telegram that card restates the reply already in the chat. If the PNG render fails (playwright or Chromium missing) or nothing appears within 300 seconds, nothing is sent. The PNG needs `playwright` and a Chromium for the earshot checkout (`npx playwright install chromium`).
+
+`hermes -z` runs through the gateway with a `local` session, so it gets the link but no photo; a Telegram or Matrix DM does.
+
+After changing the plugin, `hermes plugins disable earshot && hermes plugins enable earshot` reloads it in the running gateway.
 
 ## Latency
 
