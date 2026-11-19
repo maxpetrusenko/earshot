@@ -1,0 +1,7 @@
+{
+  "name": "sit-ui",
+  "out": "explain-sit-ui",
+  "expect": "visual",
+  "situation": "ui",
+  "reply": "Updated the invoice page at http://localhost:3000/invoices so the export action is visible.\n\nBefore, the page had a single grey link labelled More in the top right, and exporting meant opening a menu, picking Export, then choosing a format. Now the toolbar shows an Export button next to the search box, and the button opens a small dropdown with CSV and PDF. On mobile the toolbar wraps and the button moves under the search box so it stays reachable with a thumb.\n\nThe layout of the invoice table is unchanged. I also fixed the button focus ring, which was clipped by the toolbar on narrow screens. The screen looks the same for people who never export. Screenshots of both widths are in the PR."
+}

@@ -47,6 +47,8 @@ export interface Config {
   tts: TtsConfig;
   image: { type: "mermaid" | "none"; renderer: "beautiful-mermaid"; theme: "paper" };
   serve: ServeConfig;
+  /** auto: print the Explain line by itself when the reply is a situation worth a picture (see situation.ts). */
+  visuals: { auto: boolean };
   privacy: { redact: boolean; max_input_chars: number; evidence_hosts: string[] };
   /** story: a conversational memo (prompt v1); brief: the terse v0 memo. */
   script: { style: ScriptStyle };
@@ -79,6 +81,7 @@ export const DEFAULTS: Config = {
   },
   image: { type: "mermaid", renderer: "beautiful-mermaid", theme: "paper" },
   serve: { mode: "tailscale-serve", port: 7777, https_port: 443 },
+  visuals: { auto: true },
   privacy: { redact: true, max_input_chars: 40000, evidence_hosts: [] },
   trigger: { min_chars: 80, require_tool_use: false, opt_in_tag: false },
   script: { style: DEFAULT_STYLE },
@@ -155,7 +158,7 @@ export function parseConfig(text: string): Config {
   }
   if (!isObj(raw)) throw new ConfigError("config: top level must be a mapping");
   for (const k of Object.keys(raw)) {
-    if (!["llm", "tts", "image", "serve", "privacy", "trigger", "script", "retention"].includes(k)) {
+    if (!["llm", "tts", "image", "serve", "visuals", "privacy", "trigger", "script", "retention"].includes(k)) {
       throw new ConfigError(`config: unknown key "${k}"`);
     }
   }
@@ -164,6 +167,7 @@ export function parseConfig(text: string): Config {
   const tts = section(raw, "tts", ["type", "base_url", "model", "voice", "format", "speed", "api_key_env", "timeout_s", "profile", "profiles", "original_base_url"]);
   const image = section(raw, "image", ["type", "renderer", "theme"]);
   const serve = section(raw, "serve", ["mode", "port", "https_port"]);
+  const visuals = section(raw, "visuals", ["auto"]);
   const privacy = section(raw, "privacy", ["redact", "max_input_chars", "evidence_hosts"]);
   const trigger = section(raw, "trigger", ["min_chars", "require_tool_use", "opt_in_tag"]);
   const script = section(raw, "script", ["style"]);
@@ -200,6 +204,7 @@ export function parseConfig(text: string): Config {
       port: pick(serve, "serve", "port", d.serve.port, port, "a port number"),
       https_port: pick(serve, "serve", "https_port", d.serve.https_port, port, "a port number"),
     },
+    visuals: { auto: pick(visuals, "visuals", "auto", d.visuals.auto, isBool, "true or false") },
     privacy: {
       redact: pick(privacy, "privacy", "redact", d.privacy.redact, isBool, "true or false"),
       max_input_chars: pick(privacy, "privacy", "max_input_chars", d.privacy.max_input_chars, isNum, "a positive number"),

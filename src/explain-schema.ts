@@ -4,14 +4,14 @@
  * the renderer then escapes every value again on output.
  */
 
-import { cardsPanel, layersPanel, rangePanel, type CardsPanel, type LayersPanel, type RangePanel } from "./explain-cards-schema.js";
-import { arr, cleanText, num, oneOf, rec } from "./explain-util.js";
+import { cardsPanel, flowPanel, gridPanel, layersPanel, rangePanel, rankedPanel, type CardsPanel, type FlowPanel, type GridPanel, type LayersPanel, type RangePanel, type RankedPanel } from "./explain-cards-schema.js";
+import { arr, cleanText, cleanWords, num, oneOf, rec } from "./explain-util.js";
 
 export { cleanText };
 
 export class ExplainError extends Error {}
 
-export const EXPLAIN_TYPES = ["ui_before_after", "bug_before_after", "architecture", "timeline", "sequence", "journey", "log_compare", "state_key", "range_chart"] as const;
+export const EXPLAIN_TYPES = ["ui_before_after", "bug_before_after", "architecture", "timeline", "sequence", "journey", "log_compare", "state_key", "range_chart", "flow", "ranked", "grid"] as const;
 export type ExplainType = (typeof EXPLAIN_TYPES)[number];
 
 export type ElKind = "bar" | "controls" | "button" | "link" | "text" | "bubble" | "wave" | "row";
@@ -82,10 +82,10 @@ export interface ArchPanel {
   edges: { from: string; to: string; label: string }[];
   caption: string;
 }
-export type Panel = UiPanel | TimelinePanel | SequencePanel | ArchPanel | JourneyPanel | CardsPanel | RangePanel | LayersPanel;
+export type Panel = UiPanel | TimelinePanel | SequencePanel | ArchPanel | JourneyPanel | CardsPanel | RangePanel | LayersPanel | FlowPanel | RankedPanel | GridPanel;
 
 /** Types drawn in the reference style: eyebrow, headline, subhead, cards, footer. */
-export const CARD_TYPES: readonly ExplainType[] = ["log_compare", "state_key", "range_chart"];
+export const CARD_TYPES: readonly ExplainType[] = ["log_compare", "state_key", "range_chart", "flow", "ranked", "grid"];
 
 export interface Metric {
   label: string;
@@ -221,6 +221,9 @@ const BUILD: Record<ExplainType, (p: Record<string, unknown>) => Panel> = {
   log_compare: cardsPanel,
   state_key: cardsPanel,
   range_chart: rangePanel,
+  flow: flowPanel,
+  ranked: rankedPanel,
+  grid: gridPanel,
   journey: journeyPanel,
 };
 
@@ -260,14 +263,14 @@ export function parseExplain(raw: unknown): ExplainSpec | null {
   return {
     director: parseDirector(o.director),
     title,
-    takeaway: cleanText(o.takeaway, 140),
+    takeaway: cleanWords(o.takeaway, 140),
     type,
     panels,
     callouts: arr(o.callouts).slice(0, MAX.callouts).map((c) => cleanText(c, 80)).filter(Boolean),
     metrics,
     assumptions: arr(o.assumptions).slice(0, MAX.assumptions).map((c) => cleanText(c, 120)).filter(Boolean),
     eyebrow: cleanText(o.eyebrow, 48),
-    footer: cleanText(o.footer, 80),
+    footer: cleanWords(o.footer, 80),
     illustrative: o.illustrative === true,
   };
 }

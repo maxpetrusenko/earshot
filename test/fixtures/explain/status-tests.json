@@ -2,5 +2,6 @@
   "name": "status-tests",
   "out": "explain-status-tests",
   "expect": "no_image",
-  "reply": "Lint, typecheck, build and tests all pass (343 tests)."
+  "reply": "Lint, typecheck, build and tests all pass (343 tests).",
+  "situation": "none"
 }

@@ -1,0 +1,7 @@
+{
+  "name": "sit-logic",
+  "out": "explain-sit-logic",
+  "expect": "visual",
+  "situation": "logic",
+  "reply": "Changed how the sync worker handles a 429 from the billing API.\n\nBefore, the handler marked the job failed as soon as the API answered 429, so a short rate limit dropped the whole invoice sync and the owner got a failure email. Now the handler reads the Retry-After header, waits, and calls the API again, up to five tries. Only after the fifth 429 does it mark the job failed and send the email.\n\nThe flow is otherwise the same: receive the job from the queue, call the billing API, handle the response, write the result to the job record, notify the owner on failure. Intake, the result write and the notification are untouched; only the branch that handles the 429 response changed. I added tests for one retry that succeeds and for five retries that give up. Instead of the old instant failure, the job now waits as long as the API asks."
+}

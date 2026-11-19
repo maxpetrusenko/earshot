@@ -1,0 +1,25 @@
+{
+  "director": {
+    "intent": "The viewer believes the retry loop was caused by one step, the counter reset, and that it now lives on the job record.",
+    "key_frame": "A single chain of five steps with one red step in the middle and its cause written under it.",
+    "first_look": "The red Rebuild request step.",
+    "two_second_test": "With the text hidden the viewer can still point at the single red tile and the note under it.",
+    "motion": "No. The failure is a state, not a sequence over time."
+  },
+  "eyebrow": "WEBHOOKS / INCIDENT",
+  "title": "One reset caused the retry loop.",
+  "takeaway": "The counter lived on the request, so every 5xx rebuilt it at zero.",
+  "type": "flow",
+  "footer": "Fixed by moving the counter onto the job record.",
+  "panels": [
+    {
+      "steps": [
+        { "name": "Send webhook", "detail": "POST to endpoint", "icon": "send" },
+        { "name": "Endpoint 5xx", "detail": "attempt fails", "icon": "alert" },
+        { "name": "Rebuild request", "detail": "new request object", "icon": "retry", "state": "broken", "note": "counter resets to zero on every rebuild" },
+        { "name": "Check attempts", "detail": "limit of five", "icon": "check" },
+        { "name": "Mark job dead", "detail": "alert once", "icon": "bolt" }
+      ]
+    }
+  ]
+}

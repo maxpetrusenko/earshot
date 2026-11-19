@@ -152,7 +152,7 @@ export function explainGate(spec: ExplainSpec, minDensity: number = MIN_DENSITY)
   // Code-level diagrams show what the agent did, not what the user now sees.
   if (spec.type === "sequence") return "a sequence diagram shows how the code works, not what changed for the person; draw what they see instead (a log_compare, state_key or range_chart), or return no_image";
   if (spec.type === "architecture") return "an architecture drawn as boxes and lines shows how the code works, not what changed; it is allowed only as layers (name, detail, icon, link, items): real component names, an icon on each, one flow direction, or return no_image";
-  if (spec.type === "log_compare" || spec.type === "state_key" || spec.type === "range_chart") return `${spec.type} needs its own panel shape (cards, rows)`;
+  if (spec.type === "log_compare" || spec.type === "state_key" || spec.type === "range_chart" || spec.type === "flow" || spec.type === "ranked" || spec.type === "grid") return `${spec.type} needs its own panel shape (cards, rows)`;
   const d = visualDensity(spec);
   if (d < minDensity) return `the picture is mostly text (visual density ${(Math.floor(d * 1000) / 1000).toFixed(3)}, needs ${minDensity.toFixed(3)}); draw more mockup elements, arrows, highlights or timeline bars and fewer sentences, or return no_image`;
   return null;

@@ -2,5 +2,6 @@
   "name": "perf-illustrative",
   "out": "explain-perf-illustrative",
   "expect": "visual",
-  "reply": "Original track is ready sooner. Illustrative values only: before about 60 s, after 7 to 11 s. I have not measured this yet and have no stage breakdown."
+  "reply": "Original track is ready sooner. Illustrative values only: before about 60 s, after 7 to 11 s. I have not measured this yet and have no stage breakdown.",
+  "situation": "perf"
 }

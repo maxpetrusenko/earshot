@@ -54,6 +54,9 @@ serve:
   # loopback: 127.0.0.1 only, link is http://localhost:<port>.
   https_port: 443                 # tailscale-serve only
 
+visuals:
+  auto: true                      # print the Explain picture line by itself when the reply is a plan, bug, logic or architecture change, perf result, UI or schema change, options or fleet status (600+ chars); --no-visual forces off, --visual forces on
+
 privacy:
   redact: true                    # scrub secret-shaped strings before any network call
   max_input_chars: 40000

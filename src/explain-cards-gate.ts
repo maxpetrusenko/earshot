@@ -1,4 +1,5 @@
 import type { Layer } from "./explain-cards-schema.js";
+import { flowProblem, gridProblem, rankedProblem } from "./explain-flow.js";
 import type { ExplainSpec, Panel } from "./explain-schema.js";
 
 /** A node name that names nothing. */
@@ -13,13 +14,19 @@ export function cardLabels(p: Panel): string[] {
       return p.rows.map((r) => r.label);
     case "layers":
       return p.layers.flatMap((l) => [l.name, ...l.items.map((i) => i.name)]);
+    case "flow":
+      return p.lanes.flatMap((l) => l.steps.flatMap((x) => [x.name, x.detail]).filter(Boolean));
+    case "ranked":
+      return p.items.map((i) => i.name);
+    case "grid":
+      return p.cells.map((c) => c.name);
     default:
       return [];
   }
 }
 
 /** True for panels drawn as cards, a range axis or layers. */
-export const isCardPanel = (p: Panel | undefined): boolean => p?.kind === "cards" || p?.kind === "range" || p?.kind === "layers";
+export const isCardPanel = (p: Panel | undefined): boolean => p?.kind === "cards" || p?.kind === "range" || p?.kind === "layers" || p?.kind === "flow" || p?.kind === "ranked" || p?.kind === "grid";
 
 const sig = (t: string): string[] => (t.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []).filter((w) => !["and", "the", "for", "with"].includes(w));
 
@@ -76,7 +83,13 @@ export function cardsGate(spec: ExplainSpec): string | null {
       if (dup >= 0) return `the arrow label "${p.layers[dup]!.link}" repeats names already drawn in the boxes; say what travels (a protocol or a verb), not the capabilities`;
       return null;
     }
+    case "flow":
+      return flowProblem(p);
+    case "ranked":
+      return rankedProblem(p);
+    case "grid":
+      return gridProblem(p);
     default:
-      return "this type needs the card, range or layer panel";
+      return "this type needs the card, range, layer, flow, ranked or grid panel";
   }
 }

@@ -5,7 +5,7 @@ import { directorProblem, explainGate } from "../src/explain-gate.js";
 import { renderExplainHtml } from "../src/explain-render.js";
 import { parseExplain, type ExplainSpec } from "../src/explain-schema.js";
 import type { LlmProvider } from "../src/llm.js";
-import { orcaLines, writeOrcaPlaceholders } from "../src/orca-output.js";
+import { armOrcaDeadline, orcaLines } from "../src/orca-output.js";
 import { renderPendingHtml } from "../src/orca.js";
 import { DIRECTOR, EXPLAIN_SPEC } from "./explain-fixtures.js";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
@@ -133,16 +133,23 @@ describe("--visual lines and placeholders", () => {
     expect(orcaLines("abc", "http://h")).not.toMatch(/explain/i);
     expect(orcaLines("abc", "http://h", false).split("\n")).toHaveLength(2);
   });
-  it("writes a visible placeholder for the Explain page, and none without the flag", () => {
+  it("writes nothing up front; at the read window's end it writes the card and a note, never over a real page", async () => {
     const d = mkdtempSync(join(tmpdir(), "earshot-vis-"));
     try {
-      writeOrcaPlaceholders(d, "abc");
-      expect(readdirSync(d)).toEqual(["earshot-abc-player.html"]);
-      writeOrcaPlaceholders(d, "abc", true);
-      const page = readFileSync(join(d, "earshot-abc-explain.html"), "utf8");
-      expect(page).toContain("Drawing the picture.");
-      expect(page).toContain("location.reload()");
-      expect(page).not.toContain("html,body{display:none");
+      const job = { dir: d, png: false, visual: true, written: { player: false, explain: false } };
+      expect(readdirSync(d)).toEqual([]);
+      const disarm = armOrcaDeadline(job, "abc", () => "<h1>card</h1>", () => undefined, 20);
+      await new Promise((r) => setTimeout(r, 80));
+      disarm();
+      expect(readFileSync(join(d, "earshot-abc-explain.html"), "utf8")).toContain("card");
+      expect(readFileSync(join(d, "earshot-abc-player.html"), "utf8")).toContain("Use the Listen link");
+      expect(readFileSync(join(d, "earshot-abc-player.html"), "utf8")).not.toContain("location.reload()");
+      const d2 = mkdtempSync(join(tmpdir(), "earshot-vis2-"));
+      const done = { dir: d2, png: false, visual: true, written: { player: true, explain: true } };
+      armOrcaDeadline(done, "abc", () => "x", () => undefined, 10);
+      await new Promise((r) => setTimeout(r, 60));
+      expect(readdirSync(d2)).toEqual([]);
+      rmSync(d2, { recursive: true, force: true });
     } finally {
       rmSync(d, { recursive: true, force: true });
     }

@@ -6,6 +6,8 @@ import { Semaphore, TrackWriter } from "./track.js";
 import type { Config } from "./config.js";
 import { beginRun, endRun } from "./lib/llm-tracing.js";
 import { buildSketch } from "./sketch.js";
+import { captureShotPage } from "./explain-shot.js";
+import type { Situation } from "./situation.js";
 import { buildExplain, directorFileName, directorLines } from "./explain.js";
 import { renderFallbackHtml } from "./explain-fallback.js";
 import type { LlmProvider } from "./llm.js";
@@ -28,6 +30,8 @@ export interface RunOptions {
   waitForAudio?: boolean;
   /** `--visual`: the explain page must never come out empty. When the model draws nothing (NO_IMAGE, a failed gate, an LLM error) a deterministic "what changed" card from the reply is written in its place. */
   visual?: boolean;
+  /** The classifier's verdict, passed to the explain model as a hint and used to try a real screenshot for a UI change. */
+  situation?: Situation;
   /** Called once both audio tracks have settled, before the explain page is awaited: the Orca worker writes the player here. */
   onAudioReady?: () => Promise<void>;
   /** Called when the explain stage ends: its page, or null when there is no image. */
@@ -175,11 +179,18 @@ export async function executeBrief(cfg: Config, llm: LlmProvider, prep: Prepared
     };
     const explainJob: Promise<void> =
       opts.explain && !opts.noSketch && cfg.image.type !== "none"
-        ? stage(stages, "explain", log, () => buildExplain(llm, clean(text))).then(
+        ? stage(stages, "explain", log, async () => {
+            // A UI change that names a live page gets a real screenshot instead of a drawing; any miss falls through to the model.
+            if (opts.situation === "ui" && opts.visual) {
+              const shot = await captureShotPage(clean(text), log);
+              if (shot) return { visuals: [{ html: shot, spec: null }], html: shot, spec: null, retries: 0, reason: null } as unknown as Awaited<ReturnType<typeof buildExplain>>;
+            }
+            return buildExplain(llm, clean(text), { situation: opts.situation });
+          }).then(
             async (r) => {
               r.visuals.forEach((v, i) => {
                 writeFileInBundle(id, i === 0 ? "explain.html" : `explain${i + 1}.html`, v.html);
-                if (!v.spec.director) return;
+                if (!v.spec?.director) return;
                 const lines = directorLines(v.spec.director);
                 lines.forEach((l) => log(`director ${i + 1} ${l}`));
                 writeFileInBundle(id, directorFileName(i), `${lines.join("\n")}\n`);

@@ -51,6 +51,8 @@ The model picks a type and fills panels for it:
 | `sequence` | actors and messages |
 | `architecture` | components and labeled data paths |
 | `journey` | three to five steps, each showing the real thing the user sees |
+| `flow` | 3 to 7 real steps in one direction with an icon each; the changed step is outlined, the broken step is red with its cause; optional before and after lanes share rows. Rejected with no marked step or generic names |
+| `ranked`, `grid` | options best first with one recommended; hosts or agents side by side |
 
 Every panel carries a caption about what the user can now do, and an element that changed is outlined with a short arrow note. The spec also carries a title, a takeaway, up to three callouts and metrics. A metric with `verified: true` is shown as measured, with the source it names; an unverified one is shown with the word "target". `{"no_image": true}` (or the text `NO_IMAGE`) means no page: a status update, a short answer, a test run.
 
@@ -61,7 +63,7 @@ Director pass (prompt v6): before the visual the model writes five director line
 Explainer style (prompt v6): pages follow the reference images in `examples/references/`. Types `log_compare`, `state_key`, `range_chart` and layered `architecture` draw an eyebrow, a headline that states the conclusion, a subhead, the evidence in one close-up and an optional footer; they skip the density gate and use their own: an eyebrow with a slash, a headline of nine words at most, two cards for a log or state, at least two numeric rows for a range (no numbers, no axis), the word ILLUSTRATIVE in the eyebrow when `illustrative` is true, and for an architecture three real-named layers with an icon on each. The rules are shared with the `explainer-visuals` skill.
 
 
-`--explain-png` also writes one PNG per explain page (`earshot-<id>-explain.png`, `-explain2.png`, `-explain3.png`), 1080 px wide at 2x and full page height, through Playwright, which must be installed with a Chromium. `--no-explain` or `--no-sketch` skips the stage, and `image.type: none` disables it in config. 
+`--explain-png` also writes one PNG per explain page (`earshot-<id>-explain.png`, `-explain2.png`, `-explain3.png`), 1080 px wide at 2x, cropped to the content (height follows the page, padded 40 px), through Playwright, which must be installed with a Chromium. `--no-explain` or `--no-sketch` skips the stage, and `image.type: none` disables it in config. 
 
 ### `--visual`: a picture on request
 
@@ -80,6 +82,14 @@ pnpm tsx scripts/explain-score.ts <dir> --final --width 390 --min 8   # macbook-
 ```
 
 `explain-score.ts` scores images in parallel (`--jobs`, default 4). The two-second test and every draft round run on Sonnet (`--twosec-model`, `--draft-model`, both `sonnet`); Opus scores only with `--final` (`--final-model`, default `opus`), and `--model` overrides the rubric model in either mode. `--width 390` scores only the shots rendered at 390 px. It prints the wall time and the models on stderr (`--json` for machine output). Measured on the same seven 390 px images: 127 s with Opus one image at a time before, 28 s with Sonnet four at a time after; the Opus `--final` pass over the same set takes about 37 s.
+
+### Automatic
+
+`visuals.auto` (default true) prints the Explain line by itself when `src/situation.ts` finds a situation other than none and the reply is 600 characters or longer. The classifier is a deterministic score over structure (headings, bullets, code) and vocabulary, with no LLM call; `none` covers status updates, test and lint results, short answers and drafts, and `post` routes to post media with no explain image. The situation goes to the model as a hint (plan: flow, architecture: layers, logic: flow with before and after lanes, bug: flow with the failing step red, perf: range chart, UI: before and after, schema: before and after tables, options: ranked, hosts: grid). `--no-visual` forces it off for one reply, `--visual` forces it on. A UI change that names a page that answers HEAD within 2 s gets a real screenshot with one outline instead of a drawing.
+
+### Does Orca swap the page when the file changes? No
+
+Read from Orca's source (`shared/native-chat/native-chat-visual-shell.js`, the renderer's visual hook and the `agentSession.readVisual` contract): the host reads the file once when the visual mounts and keeps it in a cache keyed by session and file name. It re-reads only when the visual remounts (reopening the chat) or when that file is open in an Orca file tab and changes. A file that does not exist yet is retried at 1.5, 4 and 10 s (15.5 s in all), then the visual shows "Visualization unavailable". The page is rendered from an iframe `srcdoc` with `connect-src 'none'`, so it cannot fetch its own file, and `location.reload()` re-renders the same text (`test/orca-swap.test.ts` runs both with Orca's own shell). So a stand-in page that is later overwritten stays on screen until the chat is reopened. earshot therefore writes nothing until a page is real, and at 12 s writes a final page (a note for the player, the deterministic card for Explain) so something shows inside the retry window. A real page that arrives later replaces it on the next mount.
 
 ## Why Web Audio
 
@@ -131,5 +141,5 @@ tts:
 
 ## Limits
 
-- Not verified: whether Orca re-renders a file in place when it is rewritten. Each page needs a new file name.
+- Orca does not re-render a file that is rewritten after it first rendered (see above); each page needs a new file name and is written once it is real.
 - The page uses Orca theme tokens with fallbacks; it never redefines a token and avoids `100vh`.

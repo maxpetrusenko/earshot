@@ -2,5 +2,6 @@
   "name": "gate-threshold",
   "out": "explain-gate-threshold",
   "expect": "visual",
-  "reply": "Gate threshold: there was no off-by-one. The message printed two decimals, so 0.549 showed as '0.55 needs 0.55'. It now prints three."
+  "reply": "Gate threshold: there was no off-by-one. The message printed two decimals, so 0.549 showed as '0.55 needs 0.55'. It now prints three.",
+  "situation": "bug"
 }

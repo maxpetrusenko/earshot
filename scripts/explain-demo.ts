@@ -11,6 +11,7 @@ import { buildExplain } from "../src/explain.js";
 import { visualDensity } from "../src/explain-gate.js";
 import { createLlm } from "../src/llm.js";
 import { redact } from "../src/redact.js";
+import type { Situation } from "../src/situation.js";
 
 const FIX = join(import.meta.dirname, "..", "test", "fixtures", "explain");
 const OUT = process.env.EXPLAIN_OUT ?? join(homedir(), "earshot-demo");
@@ -28,6 +29,8 @@ interface Fixture {
   name: string;
   out: string;
   expect: "visual" | "no_image";
+  /** The classifier label, passed to the model as a hint. */
+  situation?: Situation;
   reply: string;
 }
 const fixtures = readdirSync(FIX)
@@ -38,7 +41,7 @@ const fixtures = readdirSync(FIX)
 const pages: { name: string; file: string; density: number; reply: string }[] = [];
 for (const f of fixtures) {
   const t = performance.now();
-  const r = await buildExplain(llm, cfg.privacy.redact ? redact(f.reply).text : f.reply);
+  const r = await buildExplain(llm, cfg.privacy.redact ? redact(f.reply).text : f.reply, { situation: f.situation });
   const ms = Math.round(performance.now() - t);
   if (r.visuals.length > 0) {
     for (const [i, v] of r.visuals.entries()) {

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { EXPLAIN_SPEC } from "./explain-fixtures.js";
 import { startFakeProvider } from "./helpers.js";
 
+const rd = (f: string): string => (existsSync(f) ? readFileSync(f, "utf8") : "");
 const until = async (fn: () => boolean, ms = 30000) => {
   const t = Date.now();
   while (Date.now() - t < ms) {
@@ -52,14 +53,13 @@ describe("earshot run --visual", () => {
     const r = await run(["--visual"], { explain: EXPLAIN_SPEC, port: 17791 });
     expect(r.lines).toHaveLength(3);
     expect(r.lines[1]).toBe(`::orca-visual{file="earshot-${r.id}-explain.html" title="Explain"}`);
-    expect(existsSync(r.explainFile)).toBe(true); // the placeholder is on disk before the line is printed
-    expect(await until(() => readFileSync(r.explainFile, "utf8").includes("Retries now stop at five"))).toBe(true);
-    expect(readFileSync(r.explainFile, "utf8")).not.toContain("Drawing the picture.");
+    expect(await until(() => rd(r.explainFile).includes("Retries now stop at five"))).toBe(true);
+    expect(rd(r.explainFile)).not.toContain("Drawing the picture.");
     expect(await until(() => existsSync(join(r.bundle, "explain.director.txt")))).toBe(true);
     const saved = readFileSync(join(r.bundle, "explain.director.txt"), "utf8");
     expect(saved.split("\n").filter(Boolean)).toHaveLength(5);
     expect(saved).toMatch(/^intent: /);
-    expect(readFileSync(r.explainFile, "utf8")).not.toContain("intent:");
+    expect(rd(r.explainFile)).not.toContain("intent:");
   }, 60000);
 
   it("three visuals: still one Explain line, and that page stacks all three, never an empty card", async () => {
@@ -68,8 +68,8 @@ describe("earshot run --visual", () => {
     const r = await run(["--visual"], { explain: { visuals: [EXPLAIN_SPEC, two, three] }, port: 17797 });
     expect(r.lines).toHaveLength(3);
     expect(r.lines.filter((l) => l.includes("-explain"))).toHaveLength(1);
-    expect(await until(() => readFileSync(r.explainFile, "utf8").includes("Third visual headline"))).toBe(true);
-    const page = readFileSync(r.explainFile, "utf8");
+    expect(await until(() => rd(r.explainFile).includes("Third visual headline"))).toBe(true);
+    const page = rd(r.explainFile);
     for (const t of ["Retries now stop at five", "Second visual headline", "Third visual headline"]) expect(page).toContain(t);
     expect(page).not.toContain("Drawing the picture.");
     expect(readdirSync(r.scratch).filter((f) => f.includes("-explain")).sort()).toEqual([`earshot-${r.id}-explain.html`]);
@@ -80,8 +80,8 @@ describe("earshot run --visual", () => {
     const r = await run(["--visual"], { port: 17792 });
     expect(r.lines).toHaveLength(3);
     expect(r.lines[1]).toMatch(/-explain\.html" title="Explain"/);
-    expect(await until(() => readFileSync(r.explainFile, "utf8").includes("WHAT CHANGED"))).toBe(true);
-    const page = readFileSync(r.explainFile, "utf8");
+    expect(await until(() => rd(r.explainFile).includes("WHAT CHANGED"))).toBe(true);
+    const page = rd(r.explainFile);
     expect(page).toContain("<h1>Retries stop at five.</h1>");
     expect(page).toContain("<span>Dead letter after five tries</span>");
     expect(page).not.toContain("Drawing the picture.");
@@ -91,22 +91,37 @@ describe("earshot run --visual", () => {
   it("writes the fallback card when the gate rejects the model's image twice", async () => {
     const bad = { ...EXPLAIN_SPEC, director: undefined };
     const r = await run(["--visual"], { explain: bad, port: 17793 });
-    expect(await until(() => readFileSync(r.explainFile, "utf8").includes("WHAT CHANGED"))).toBe(true);
+    expect(await until(() => rd(r.explainFile).includes("WHAT CHANGED"))).toBe(true);
   }, 60000);
 
   it("a one-line reply still gets a fallback card, not an empty one", async () => {
     const r = await run(["--visual"], { reply: "Done.", port: 17794 });
-    expect(await until(() => readFileSync(r.explainFile, "utf8").includes("WHAT CHANGED"))).toBe(true);
-    expect(readFileSync(r.explainFile, "utf8")).toMatch(/<li><i><\/i><span>\S/);
+    expect(await until(() => rd(r.explainFile).includes("WHAT CHANGED"))).toBe(true);
+    expect(rd(r.explainFile)).toMatch(/<li><i><\/i><span>\S/);
   }, 60000);
 
-  it("without the flag no Explain line is printed and no explain page is written to the chat dir", async () => {
-    const r = await run([], { explain: EXPLAIN_SPEC, reply: REPLY.repeat(4), port: 17795 }); // long enough that the stage runs
+  it("--no-visual forces the picture off even for a reply that would get one, and no explain page is written to the chat dir", async () => {
+    const r = await run(["--no-visual"], { explain: EXPLAIN_SPEC, reply: REPLY.repeat(4), port: 17795 }); // long enough that the stage runs
     expect(r.lines).toHaveLength(2);
     expect(r.lines.join("\n")).not.toMatch(/explain/i);
     expect(await until(() => existsSync(join(r.bundle, "explain.html")))).toBe(true);
     expect(readdirSync(r.scratch).filter((f) => f.includes("-explain"))).toEqual([]);
   }, 60000);
+
+  it("automatic: a long bug reply gets the Explain line with no flag; a long status reply and a short reply do not", async () => {
+    const bug = readFileSync(join(import.meta.dirname, "fixtures/explain/sit-bug.json"), "utf8");
+    const reply = (JSON.parse(bug) as { reply: string }).reply;
+    const auto = await run([], { explain: EXPLAIN_SPEC, reply, port: 17798 });
+    expect(auto.lines).toHaveLength(3);
+    expect(auto.lines[1]).toMatch(/-explain\.html" title="Explain"/);
+    expect(await until(() => rd(auto.explainFile).includes("Retries now stop at five"))).toBe(true);
+    const status = await run([], { explain: EXPLAIN_SPEC, reply: `Ran the full gate on the branch. ${"All 212 tests pass and lint is clean, typecheck passes, build passes. ".repeat(10)}`, port: 17799 });
+    expect(status.lines).toHaveLength(2);
+    const short = await run([], { explain: EXPLAIN_SPEC, reply: "Fixed the root cause of the retry bug.", port: 17800 });
+    expect(short.lines).toHaveLength(2);
+    const forcedOff = await run(["--no-visual"], { explain: EXPLAIN_SPEC, reply, port: 17801 });
+    expect(forcedOff.lines).toHaveLength(2);
+  }, 90000);
 
   it("--visual with --no-explain prints no Explain line", async () => {
     const r = await run(["--visual", "--no-explain"], { explain: EXPLAIN_SPEC, port: 17796 });

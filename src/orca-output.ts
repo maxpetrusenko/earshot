@@ -17,6 +17,8 @@ export interface OrcaJob {
   png: boolean;
   /** `--visual`: the Explain line is already in the chat with a placeholder page; the worker writes the real page over it. */
   visual?: boolean;
+  /** Pages already written. */
+  written: Written;
 }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -34,11 +36,38 @@ export function orcaLines(id: string, base: string, visual = false): string {
   return [orcaLine(`earshot-${id}-player.html`), ...(visual ? [orcaLine(`earshot-${id}-explain.html`, "Explain")] : []), listenMarkdown(briefLinks(base, id))].join("\n");
 }
 
-/** Write the stand-ins before the lines are printed, so Orca finds a file the moment it renders the reply. */
-export function writeOrcaPlaceholders(dir: string, id: string, visual = false): void {
-  const madeAt = Date.now();
-  writeOrcaPage(dir, id, renderPendingHtml("player", { madeAt }), "player");
-  if (visual) writeOrcaPage(dir, id, renderPendingHtml("explain", { madeAt, visible: true }), "explain");
+/**
+ * How long Orca keeps asking for a visual file that does not exist yet: it reads at once, then 1.5, 4 and 10 s after
+ * each miss (15.5 s in all), then shows "Visualization unavailable" for good. A page written after that is only seen
+ * when the chat is reopened. So the worker writes nothing until a page is real, and at this deadline writes a final
+ * page (a note for the player, the deterministic card for Explain) so something always shows inside the window.
+ */
+export const ORCA_READ_WINDOW_MS = Number(process.env.EARSHOT_ORCA_READ_WINDOW_MS) || 12_000;
+
+/** Which pages the worker has written, so the deadline never writes a stand-in over a real page. */
+export interface Written {
+  player: boolean;
+  explain: boolean;
+}
+
+/** Arm the deadline. Returns the disarm function; call it when the worker ends. */
+export function armOrcaDeadline(job: OrcaJob, id: string, fallbackExplain: () => string, log: (l: string) => void, ms = ORCA_READ_WINDOW_MS): () => void {
+  const t = setTimeout(() => {
+    try {
+      if (!job.written.player) {
+        writeOrcaPage(job.dir, id, renderPendingHtml("player", { reload: false, note: "Audio is still being made. Use the Listen link." }), "player");
+        log(`orca: player not ready at ${ms} ms; wrote a note page`);
+      }
+      if (job.visual && !job.written.explain) {
+        writeOrcaPage(job.dir, id, fallbackExplain(), "explain");
+        log(`orca: explain not ready at ${ms} ms; wrote the fallback card`);
+      }
+    } catch (e) {
+      log(`orca deadline write failed: ${msg(e)}`);
+    }
+  }, ms);
+  t.unref();
+  return () => clearTimeout(t);
 }
 
 /** Encode the finished tracks into one inline page. Throws with the reason when there is nothing to play. */
@@ -54,15 +83,17 @@ export async function buildPlayer(id: string, log: (l: string) => void): Promise
 }
 
 /** Replace the player placeholder: the real page, or a final note (no reload) when the audio failed. */
-export async function finishPlayer(dir: string, id: string, log: (l: string) => void): Promise<void> {
+export async function finishPlayer(dir: string, id: string, log: (l: string) => void, written?: Written): Promise<void> {
   try {
     const fit = await buildPlayer(id, log);
     const file = writeOrcaPage(dir, id, fit.html, "player");
+    if (written) written.player = true;
     log(`orca page ${file}: ${fit.bytes} bytes at ${fit.kbps}k${fit.droppedOriginal ? ", original dropped" : ""}`);
   } catch (e) {
     log(`orca: ${msg(e)}; the player page says so`);
     try {
       writeOrcaPage(dir, id, renderPendingHtml("player", { reload: false, note: "Audio could not be made. Use the Listen link." }), "player");
+      if (written) written.player = true;
     } catch {
       /* the scratch dir is gone: nothing left to tell */
     }
@@ -74,7 +105,9 @@ export async function finishExplain(job: OrcaJob, id: string, htmls: string[], l
   if (job.visual && htmls.length > 0) {
     // One line is in the chat and the number of visuals was unknown when it was printed, so that one page shows them all, stacked.
     try {
-      log(`orca page ${writeOrcaPage(job.dir, id, stackPages(htmls.slice(0, EXPLAIN_KINDS.length)), "explain")} (${Math.min(htmls.length, EXPLAIN_KINDS.length)} visual${htmls.length > 1 ? "s" : ""})`);
+      const page = writeOrcaPage(job.dir, id, stackPages(htmls.slice(0, EXPLAIN_KINDS.length)), "explain");
+      job.written.explain = true;
+      log(`orca page ${page} (${Math.min(htmls.length, EXPLAIN_KINDS.length)} visual${htmls.length > 1 ? "s" : ""})`);
     } catch (e) {
       log(`orca explain page failed: ${msg(e)}`);
     }

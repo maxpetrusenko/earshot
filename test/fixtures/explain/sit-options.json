@@ -1,0 +1,7 @@
+{
+  "name": "sit-options",
+  "out": "explain-sit-options",
+  "expect": "visual",
+  "situation": "options",
+  "reply": "Three options for the report cache, ranked.\n\n1. Redis with a 10 minute TTL. Recommended: it is already running for sessions, invalidation is one key delete, and a miss costs one query. No new infrastructure.\n2. In-process memory cache. Cheapest to build, but each of the four workers keeps its own copy, so users can see different numbers for up to ten minutes, and a deploy clears everything.\n3. Materialized view refreshed every hour. Always consistent and fast to read, but the data is up to an hour stale and the refresh locks the table for about 20 seconds.\n\nI would go with option 1. The trade-off against option 3 is freshness for a small operational cost. Tell me if the staleness of the view is acceptable, since that would make it the simpler choice."
+}
