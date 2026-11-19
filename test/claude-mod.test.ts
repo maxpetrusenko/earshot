@@ -58,4 +58,16 @@ describe("claude-code --mode mod", () => {
     run("uninstall", "claude-code", "--mode", "mod");
     expect(existsSync(join(home, "skills", "earshot-player"))).toBe(false);
   }, 60_000);
+
+  it("CLI: install claude-code with no --mode installs the skill (default mode is skill)", () => {
+    const root = join(import.meta.dirname, "..");
+    execFileSync("pnpm", ["build"], { cwd: root, stdio: "ignore" });
+    const env = { ...process.env, CLAUDE_CONFIG_DIR: home, EARSHOT_HOME: join(home, "e") };
+    const run = (...a: string[]) => execFileSync("node", [join(root, "dist", "cli.js"), ...a], { env, encoding: "utf8" });
+    run("install", "claude-code");
+    expect(existsSync(join(home, "skills", "earshot", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(home, "skills", "earshot-player"))).toBe(false);
+    run("uninstall", "claude-code");
+    expect(existsSync(join(home, "skills", "earshot"))).toBe(false);
+  }, 60_000);
 });
