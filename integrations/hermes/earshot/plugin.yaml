@@ -1,0 +1,7 @@
+name: earshot
+version: 0.1.0
+description: "Appends one earshot line, [Listen](...) · [Original](...), to Hermes replies on cli, telegram and matrix. Starts the memo detached, never blocks the reply."
+author: earshot
+provides_hooks:
+  - transform_llm_output
+kind: standalone
